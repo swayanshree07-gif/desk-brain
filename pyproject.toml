@@ -1,0 +1,13 @@
+[project]
+name = "deskbrain"
+version = "0.1.0"
+description = "Local search, graph, doubts board and flashcards over a Markdown desk"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -13,3 +13,8 @@ node_modules/
 *.pt
 *.safetensors
 *.onnx
+.pytest_cache/
+*.egg-info/
+*.sqlite
+*.npy
+.env
