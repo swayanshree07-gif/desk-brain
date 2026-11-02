@@ -1,0 +1,15 @@
+build/
+dist/
+out/
+data/
+ckpt/
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+*.log
+*.iso
+*.bin
+*.pt
+*.safetensors
+*.onnx
