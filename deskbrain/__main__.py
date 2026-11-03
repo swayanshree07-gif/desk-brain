@@ -4,6 +4,8 @@
   doubts   list doubts (open first)
   chunks   per-page section (chunk) counts and size stats
   links    link summary by status; --broken lists only bad links
+  index    build / incrementally update the SQLite index in data/
+  search   keyword (BM25) search: deskbrain search "query" [-k N] [--all-sections]
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ from .chunker import chunk_page
 from .links import LinkResolver
 from .parser import parse
 from .scanner import read_page, scan
+from .bm25 import BM25Index, snippet
+from .store import Index, default_db_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,11 +32,52 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("chunks", help="split pages into sections; print counts")
     lp = sub.add_parser("links", help="resolve links, list broken ones")
     lp.add_argument("--broken", action="store_true", help="only print the bad links")
+    ip = sub.add_parser("index", help="build or incrementally update the index in data/")
+    ip.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
+    ip.add_argument("-v", "--verbose", action="store_true", help="list added/changed/removed pages")
+    sp = sub.add_parser("search", help="keyword search (updates the index first)")
+    sp.add_argument("query")
+    sp.add_argument("-k", type=int, default=10, help="number of hits (default 10)")
+    sp.add_argument("--all-sections", action="store_true", help="allow several hits from one page (default: 2 max)")
+    sp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
+    sp.add_argument("--color", choices=("auto", "always", "never"), default="auto")
     args = ap.parse_args(argv)
     root = (args.desk or desk_path()).expanduser().resolve()
     if not root.is_dir():
         print(f"desk not found: {root}", file=sys.stderr)
         return 2
+
+    if args.cmd == "index":
+        with Index(args.db or default_db_path(), root) as ix:
+            st = ix.update()
+            print(st.summary())
+            if args.verbose:
+                for label, rels in (("+", st.added), ("~", st.changed), ("-", st.removed)):
+                    for r in rels:
+                        print(f"  {label} {r}")
+            c = ix.counts()
+            print(", ".join(f"{k}={v}" for k, v in c.items()))
+            bad = ix.check_privacy()
+            if bad:
+                print(f"PRIVACY ERROR: {bad}", file=sys.stderr)
+                return 3
+        return 0
+
+    if args.cmd == "search":
+        with Index(args.db or default_db_path(), root) as ix:
+            ix.update()
+            bm = BM25Index(ix.chunks())
+        hits = bm.search(args.query, k=args.k, per_page=None if args.all_sections else 2)
+        color = args.color == "always" or (args.color == "auto" and sys.stdout.isatty())
+        mark = ("\033[1;33m", "\033[0m") if color else ("**", "**")
+        if not hits:
+            print(f"no results for {args.query!r}")
+            return 1
+        for n, h in enumerate(hits, 1):
+            c = h.chunk
+            print(f"{n:>2}. {c.rel}:{c.start_line}  [{h.score:.2f}]  {c.title}")
+            print(f"    {snippet(c.text, h.terms, mark=mark)}")
+        return 0
 
     files = scan(root)
     pages = [parse(read_page(root, f.rel), f.rel) for f in files]
