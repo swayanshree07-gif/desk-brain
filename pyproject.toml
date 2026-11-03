@@ -3,11 +3,24 @@ name = "deskbrain"
 version = "0.1.0"
 description = "Local search, graph, doubts board and flashcards over a Markdown desk"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "markdown-it-py>=3",
+    "fastembed>=0.3",
+    "numpy>=1.26",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.setuptools]
+packages = ["deskbrain"]
+
+[tool.setuptools.package-data]
+deskbrain = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

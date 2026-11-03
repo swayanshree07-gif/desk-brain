@@ -1,0 +1,35 @@
+:root { --fg: #1d1d1f; --muted: #6b6b70; --bg: #fbfbfa; --line: #e3e3e0; --accent: #2d5bd7; --mark: #fff2a8; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6e6e3; --muted: #9a9aa0; --bg: #17171a; --line: #2c2c31; --accent: #8fb0ff; --mark: #5a4d00; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
+header { position: sticky; top: 0; display: flex; gap: 1rem; align-items: center; padding: .6rem 1.2rem;
+  border-bottom: 1px solid var(--line); background: var(--bg); z-index: 1; }
+.brand { font-weight: 700; color: var(--fg); text-decoration: none; }
+#search-form { flex: 1; display: flex; gap: .6rem; align-items: center; }
+#q { flex: 1; max-width: 40rem; padding: .45rem .7rem; font-size: 1rem; border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--fg); }
+.opt { font-size: .85rem; color: var(--muted); white-space: nowrap; }
+button { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); cursor: pointer; }
+main { max-width: 52rem; margin: 0 auto; padding: 1rem 1.2rem 4rem; }
+.muted { color: var(--muted); font-size: .85rem; }
+a { color: var(--accent); }
+mark { background: var(--mark); color: inherit; padding: 0 .1em; border-radius: 2px; }
+.hit { padding: .7rem 0; border-bottom: 1px solid var(--line); }
+.hit .t { font-weight: 600; }
+.hit .crumb { color: var(--muted); font-size: .85rem; }
+.hit .snip { margin-top: .2rem; }
+.page-meta { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
+.page-body pre { overflow-x: auto; padding: .7rem; border: 1px solid var(--line); border-radius: 6px; }
+.page-body code { font-size: .9em; }
+.page-body table { border-collapse: collapse; }
+.page-body td, .page-body th { border: 1px solid var(--line); padding: .25rem .5rem; }
+.page-body h1, .page-body h2, .page-body h3 { scroll-margin-top: 4rem; }
+.flash { animation: flash 1.5s ease-out; }
+@keyframes flash { from { background: var(--mark); } to { background: transparent; } }
+a.link-broken { color: #c0392b; text-decoration: line-through; cursor: help; }
+a.link-private { color: var(--muted); cursor: not-allowed; }
+a.link-asset, a.link-unknown { color: var(--muted); text-decoration: underline dotted; cursor: help; }
+.backlinks { margin-top: 2.5rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.empty { color: var(--muted); padding: 2rem 0; }

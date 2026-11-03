@@ -6,6 +6,7 @@
   links    link summary by status; --broken lists only bad links
   index    build / incrementally update the SQLite index in data/
   search   keyword (BM25) search: deskbrain search "query" [-k N] [--all-sections]
+  embed    update the index, then embed new/changed sections into data/vectors.npy
 """
 
 from __future__ import annotations
@@ -41,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--all-sections", action="store_true", help="allow several hits from one page (default: 2 max)")
     sp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     sp.add_argument("--color", choices=("auto", "always", "never"), default="auto")
+    ep = sub.add_parser("embed", help="embed new/changed sections (model cached in data/models)")
+    ep.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     args = ap.parse_args(argv)
     root = (args.desk or desk_path()).expanduser().resolve()
     if not root.is_dir():
@@ -61,6 +64,19 @@ def main(argv: list[str] | None = None) -> int:
             if bad:
                 print(f"PRIVACY ERROR: {bad}", file=sys.stderr)
                 return 3
+        return 0
+
+    if args.cmd == "embed":
+        import time
+        from .config import DATA_DIR
+        from .embed import Embedder, VectorStore
+        t0 = time.perf_counter()
+        with Index(args.db or default_db_path(), root) as ix:
+            ix.update()
+            chunks = ix.chunks()
+        r = VectorStore(DATA_DIR / "vectors").sync(chunks, Embedder())
+        print(f"{len(chunks)} sections: {r['embedded']} embedded, {r['kept']} kept, "
+              f"{r['removed']} removed; {time.perf_counter() - t0:.1f}s")
         return 0
 
     if args.cmd == "search":

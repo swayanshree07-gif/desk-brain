@@ -105,7 +105,9 @@ class Index:
             dbp = self.db_path.resolve()
             if dbp == self.root or self.root in dbp.parents:
                 raise ValueError(f"index must not be inside the desk: {dbp}")
-        self.db = sqlite3.connect(str(db_path))
+        # check_same_thread=False: the web app shares one connection between worker
+        # threads and serialises every access with its own lock.
+        self.db = sqlite3.connect(str(db_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self._init_schema()
@@ -240,6 +242,28 @@ class Index:
 
     def page_rels(self) -> list[str]:
         return [r[0] for r in self.db.execute("SELECT rel FROM pages ORDER BY rel")]
+
+    def page(self, rel: str) -> dict | None:
+        """The stored page row (title, mtime, size, ...) or None if not indexed."""
+        r = self.db.execute("SELECT * FROM pages WHERE rel=?", (rel,)).fetchone()
+        return dict(r) if r else None
+
+    def links_from(self, rel: str) -> list[dict]:
+        """Resolved outgoing links of a page, in page order."""
+        return [dict(r) for r in self.db.execute(
+            "SELECT ord, line, raw, text, kind, status, target, anchor FROM links WHERE src=? ORDER BY ord",
+            (rel,))]
+
+    def backlinks(self, rel: str) -> list[dict]:
+        """Pages linking to ``rel`` (one row per linking page, with the first link line)."""
+        return [dict(r) for r in self.db.execute(
+            "SELECT l.src AS rel, p.title AS title, MIN(l.line) AS line FROM links l "
+            "JOIN pages p ON p.rel = l.src WHERE l.target=? AND l.status='ok' AND l.src<>? "
+            "GROUP BY l.src ORDER BY l.src", (rel, rel))]
+
+    def meta(self, key: str) -> str | None:
+        r = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+        return r[0] if r else None
 
     def check_privacy(self) -> list[str]:
         """Rels in the index that should never be there (must be empty)."""
