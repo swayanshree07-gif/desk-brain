@@ -9,6 +9,7 @@ EXPECTED = [
     "01-garden/tomatoes.md",
     "02-cooking/bread.md",
     "03-music/guitar.md",
+    "03-music/practice.md",
     "README.md",
 ]
 

@@ -2,6 +2,8 @@
 
   scan     list indexable pages with counts of headings, links, doubts, findings
   doubts   list doubts (open first)
+  chunks   per-page section (chunk) counts and size stats
+  links    link summary by status; --broken lists only bad links
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ import sys
 from pathlib import Path
 
 from .config import desk_path
+from .chunker import chunk_page
+from .links import LinkResolver
 from .parser import parse
 from .scanner import read_page, scan
 
@@ -21,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("scan", help="list indexable pages")
     sub.add_parser("doubts", help="list doubts")
+    sub.add_parser("chunks", help="split pages into sections; print counts")
+    lp = sub.add_parser("links", help="resolve links, list broken ones")
+    lp.add_argument("--broken", action="store_true", help="only print the bad links")
     args = ap.parse_args(argv)
     root = (args.desk or desk_path()).expanduser().resolve()
     if not root.is_dir():
@@ -45,6 +52,27 @@ def main(argv: list[str] | None = None) -> int:
         for rel, d in allds:
             mark = "🔴" if d.status == "open" else "🟢"
             print(f"{mark} {d.question}  ({rel}:{d.line})")
+    elif args.cmd == "chunks":
+        allc = [c for p in pages for c in chunk_page(p)]
+        for p in pages:
+            print(f"{p.rel:<60} {sum(c.rel == p.rel for c in allc):>4}")
+        sizes = sorted(len(c.text) for c in allc) or [0]
+        uniq = len({c.id for c in allc})
+        print(f"\n{len(allc)} chunks ({uniq} unique ids) from {len(pages)} pages; "
+              f"chars median={sizes[len(sizes) // 2]} max={sizes[-1]}")
+    elif args.cmd == "links":
+        resolved = LinkResolver(pages, root).resolve_all()
+        counts: dict[str, int] = {}
+        for r in resolved:
+            counts[r.status] = counts.get(r.status, 0) + 1
+        bad = [r for r in resolved if r.is_bad]
+        if not args.broken:
+            print(f"{len(resolved)} links: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+            print()
+        for r in bad:
+            print(f"{r.status:<10} {r.src}:{r.line}  -> {r.raw}")
+        if not args.broken:
+            print(f"\n{len(bad)} bad links")
     return 0
 
 
