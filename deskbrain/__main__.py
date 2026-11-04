@@ -5,8 +5,8 @@
   chunks   per-page section (chunk) counts and size stats
   links    link summary by status; --broken lists only bad links
   index    build / incrementally update the SQLite index in data/
-  search   keyword (BM25) search: deskbrain search "query" [-k N] [--all-sections]
-  embed    update the index, then embed new/changed sections into data/vectors.npy
+  search   section search: deskbrain search "query" [-k N] [--all-sections] [--mode hybrid|keyword|semantic]
+  embed    update the index, then embed new/changed sections into data/index-vectors.npy
 """
 
 from __future__ import annotations
@@ -42,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--all-sections", action="store_true", help="allow several hits from one page (default: 2 max)")
     sp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     sp.add_argument("--color", choices=("auto", "always", "never"), default="auto")
+    sp.add_argument("--mode", choices=("hybrid", "keyword", "semantic"), default=None,
+                    help="default: hybrid if the embedding model is downloaded, else keyword")
     ep = sub.add_parser("embed", help="embed new/changed sections (model cached in data/models)")
     ep.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     args = ap.parse_args(argv)
@@ -68,22 +70,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "embed":
         import time
-        from .config import DATA_DIR
         from .embed import Embedder, VectorStore
+        from .search import vectors_base
         t0 = time.perf_counter()
-        with Index(args.db or default_db_path(), root) as ix:
+        db = args.db or default_db_path()
+        with Index(db, root) as ix:
             ix.update()
             chunks = ix.chunks()
-        r = VectorStore(DATA_DIR / "vectors").sync(chunks, Embedder())
+        r = VectorStore(vectors_base(db)).sync(chunks, Embedder())
         print(f"{len(chunks)} sections: {r['embedded']} embedded, {r['kept']} kept, "
               f"{r['removed']} removed; {time.perf_counter() - t0:.1f}s")
         return 0
 
     if args.cmd == "search":
-        with Index(args.db or default_db_path(), root) as ix:
+        from .search import HybridSearcher, vectors_base
+        db = args.db or default_db_path()
+        with Index(db, root) as ix:
             ix.update()
-            bm = BM25Index(ix.chunks())
-        hits = bm.search(args.query, k=args.k, per_page=None if args.all_sections else 2)
+            chunks = ix.chunks()
+        hs = HybridSearcher(vectors_base(db))
+        hs.update(BM25Index(chunks), chunks)
+        hits = hs.search(args.query, mode=args.mode or "", k=args.k, per_page=None if args.all_sections else 2)
         color = args.color == "always" or (args.color == "auto" and sys.stdout.isatty())
         mark = ("\033[1;33m", "\033[0m") if color else ("**", "**")
         if not hits:
@@ -91,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         for n, h in enumerate(hits, 1):
             c = h.chunk
-            print(f"{n:>2}. {c.rel}:{c.start_line}  [{h.score:.2f}]  {c.title}")
+            print(f"{n:>2}. {c.rel}:{c.start_line}  [{h.score:.3f} {h.match}]  {c.title}")
             print(f"    {snippet(c.text, h.terms, mark=mark)}")
         return 0
 

@@ -33,3 +33,7 @@ a.link-private { color: var(--muted); cursor: not-allowed; }
 a.link-asset, a.link-unknown { color: var(--muted); text-decoration: underline dotted; cursor: help; }
 .backlinks { margin-top: 2.5rem; padding-top: .8rem; border-top: 1px solid var(--line); }
 .empty { color: var(--muted); padding: 2rem 0; }
+select#mode { font: inherit; padding: 2px 4px; }
+.badge { font-size: 0.75em; padding: 1px 6px; border-radius: 8px; margin-left: 6px; vertical-align: middle; background: #eee; color: #444; }
+.badge.b-semantic { background: #e6efff; color: #224; }
+.badge.b-both { background: #e7f6e7; color: #242; }

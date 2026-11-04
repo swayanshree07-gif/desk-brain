@@ -106,7 +106,8 @@ def test_private_text_never_in_api(client, desk):
     assert secret_lines
     bodies = [client.get("/api/health").text]
     for q in ("diary", "secret", "private", "day log", "tools", "canary", "xylophone moonbeam", "walrus", "kumquat"):
-        bodies.append(client.get("/api/search", params={"q": q, "k": 100, "all": "true"}).text)
+        for mode in ("keyword", "semantic", "hybrid"):
+            bodies.append(client.get("/api/search", params={"q": q, "k": 100, "all": "true", "mode": mode}).text)
     for rel in client.app.state.desk.index.page_rels():
         bodies.append(client.get("/api/page", params={"rel": rel}).text)
     blob = "\n".join(bodies)
