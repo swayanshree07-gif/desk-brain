@@ -1,10 +1,9 @@
 # Desk Brain
 
 A local web app (in progress, 30-day project) that runs on top of the Markdown knowledge base
-in `~/Personal-Desk`. Features: keyword + semantic (meaning) + hybrid search (working now), and
-planned: a knowledge-graph view (data API done),
-a doubts board (`### 🔴 Q:` open / `### 🟢 Q:` answered), auto-built flashcards with spaced
-repetition, and a weekly digest. It will serve on `127.0.0.1:8765` only, started with `./run.sh`.
+in `~/Personal-Desk`. Working now: keyword + semantic (meaning) + hybrid search, a read-only
+page view, a knowledge-graph view of pages and links, and a doubts board (`### 🔴 Q:` open /
+`### 🟢 Q:` answered). Planned: auto-built flashcards with spaced repetition, and a weekly digest. It will serve on `127.0.0.1:8765` only, started with `./run.sh`.
 
 **Privacy rules:** the desk is read-only to this app. `activity/`, `Personal/`, `tools/`,
 `_templates/` (and any `_template/` folder or hidden folder) are never indexed or shown.
@@ -45,14 +44,22 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `GET /api/search?q=…&k=20&all=false&mode=hybrid|keyword|semantic` — section hits with page, section, line,
   highlighted snippet, `match` (keyword / semantic / both), BM25 score and cosine similarity
 - `GET /api/graph?folders=true` — page + folder nodes (degree, doubts, findings, bad links, orphan flag), deduplicated link edges, folder edges, broken-link list
+- `GET /api/doubts?status=all|open|answered&area=…&q=…` — doubts board: question, status, asked, context, answer, page, line, heading `anchor`, stable `id`; plus whole-desk counts and areas
 - `GET /api/page?rel=…` — rendered page (no raw HTML; links rewritten to in-app routes), headings, links, backlinks
 - `POST /api/reindex` — incremental re-index
+
+## UI
+- `#/search?q=…` — search results; `#/page/<path>` — page view with backlinks
+- `#/graph` — knowledge graph (canvas): colour = area, size = links, red ring = has bad links, dashed ring = orphan;
+  area filter, folder/orphan toggles, highlight box; drag to pan, wheel to zoom, click a page to open it
+- `#/doubts` — open / answered columns, area filter, search within doubts; each card links to the doubt in its page
 
 ## Checks
 ```bash
 .venv/bin/pytest -q                      # all tests (embedding tests skip until the model is downloaded)
 scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls endpoints, stops it
 .venv/bin/python scripts/check_pages.py  # renders every page; fails on unsafe hrefs / private paths
+.venv/bin/python scripts/ui_preview.py data/x.html /api/health /api/graph   # snapshot page for headless screenshots
 ```
 
 ## Layout
@@ -66,12 +73,14 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `deskbrain/embed.py` — fastembed MiniLM embeddings, vector store that only embeds changed sections
 - `deskbrain/search.py` — keyword / semantic / hybrid (reciprocal-rank fusion) search with gibberish cut-offs
 - `deskbrain/graph.py` — knowledge-graph nodes and edges from the index
+- `deskbrain/doubts.py` — doubts board data (stable ids, filters, heading anchors)
 - `deskbrain/render.py` — safe Markdown → HTML for the page view
-- `deskbrain/app.py` — FastAPI app; `deskbrain/static/` — plain HTML/JS/CSS frontend
+- `deskbrain/app.py` — FastAPI app; `deskbrain/static/` — plain HTML/JS/CSS frontend (`graph.js` = graph view)
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 5 of 30 (ahead of plan, through planned Day 14): indexing, keyword/semantic/hybrid search with a
-mode selector in the UI, read-only page view (`./run.sh`), privacy/safety tests, incremental embeddings
-wired into re-index, and the graph data API (133 tests). Next: the graph view in the UI (planned Day 15).
+Day 6 of 30 (ahead of plan, through planned Day 18): indexing, keyword/semantic/hybrid search,
+read-only page view (`./run.sh`), privacy/safety tests, incremental embeddings, the graph view
+(area filter, orphan and bad-link highlighting) and the doubts board (API + UI); 143 tests.
+Next: flashcards from answered doubts and findings (planned Day 19), then spaced repetition.
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

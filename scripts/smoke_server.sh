@@ -19,7 +19,11 @@ check search-semantic 200 "$URL/api/search?q=test&mode=semantic"
 check search-badmode  422 "$URL/api/search?q=test&mode=bogus"
 mode=$(curl -s "$URL/api/search?q=test" | .venv/bin/python -c "import json,sys; print(json.load(sys.stdin)['mode'])")
 echo "info default search mode: $mode"
+check graph         200 $URL/api/graph
+check doubts        200 "$URL/api/doubts?status=open"
+check doubts-bad    422 "$URL/api/doubts?status=bogus"
 check home          200 $URL/
+check graph.js      200 $URL/static/graph.js
 check app.js        200 $URL/static/app.js
 check private-page  404 "$URL/api/page?rel=Personal/x.md"
 check traversal     404 "$URL/api/page?rel=../CLAUDE.md"

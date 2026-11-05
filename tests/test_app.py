@@ -110,6 +110,10 @@ def test_private_text_never_in_api(client, desk):
             bodies.append(client.get("/api/search", params={"q": q, "k": 100, "all": "true", "mode": mode}).text)
     for rel in client.app.state.desk.index.page_rels():
         bodies.append(client.get("/api/page", params={"rel": rel}).text)
+    bodies.append(client.get("/api/graph").text)
+    bodies.append(client.get("/api/health").text)
+    for q in ("", "diary", "secret"):
+        bodies.append(client.get("/api/doubts", params={"q": q}).text)
     blob = "\n".join(bodies)
     for s in secret_lines:
         assert s not in blob, s

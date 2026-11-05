@@ -7,6 +7,8 @@ Endpoints
                                 embedding model is available) | keyword | semantic
   GET  /api/page?rel=           one page: rendered HTML, headings, links, backlinks
   GET  /api/graph?folders=      page/folder nodes, link/folder edges, broken links
+  GET  /api/doubts?status=&area=&q=
+                                doubts board: open/answered doubts with page + anchor
   POST /api/reindex             incremental re-index of the desk
   GET  /                        the single-page frontend (static/index.html)
 
@@ -29,6 +31,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .bm25 import BM25Index, snippet, tokenize
 from .config import desk_path
+from .doubts import list_doubts
 from .graph import build_graph
 from .links import slugify
 from .render import render_page
@@ -151,6 +154,12 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
     def graph(folders: bool = True):
         with state.lock:
             return build_graph(state.index, folders=folders)
+
+    @app.get("/api/doubts")
+    def doubts(status: str = Query("all", pattern="^(all|open|answered)$"),
+               area: str = Query("", max_length=200), q: str = Query("", max_length=500)):
+        with state.lock:
+            return list_doubts(state.index, status=status, area=area, q=q)
 
     @app.post("/api/reindex")
     def reindex():
