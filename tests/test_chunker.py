@@ -39,7 +39,7 @@ def test_ids_stable_and_unique(desk):
     b = [c.id for f in scan(desk) for c in chunks_of(desk, f.rel)]
     assert a == b
     assert len(set(a)) == len(a)
-    assert len(a) == 22   # guitar.md got a doubts section on Day 6 (+3)
+    assert len(a) == 23   # guitar.md doubts (+3, Day 6); bread.md log section (+1, Day 19)
 
 
 def test_id_survives_body_edit_and_other_sections():

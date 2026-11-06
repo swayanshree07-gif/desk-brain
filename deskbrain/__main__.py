@@ -6,6 +6,7 @@
   links    link summary by status; --broken lists only bad links
   index    build / incrementally update the SQLite index in data/
   search   section search: deskbrain search "query" [-k N] [--all-sections] [--mode hybrid|keyword|semantic]
+  cards    update the index, then list flashcards: deskbrain cards [--kind K] [--show]
   embed    update the index, then embed new/changed sections into data/index-vectors.npy
 """
 
@@ -44,6 +45,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--color", choices=("auto", "always", "never"), default="auto")
     sp.add_argument("--mode", choices=("hybrid", "keyword", "semantic"), default=None,
                     help="default: hybrid if the embedding model is downloaded, else keyword")
+    cp = sub.add_parser("cards", help="list flashcards built from answered doubts and findings")
+    cp.add_argument("--kind", choices=("all", "qa", "lead", "cloze", "recall"), default="all")
+    cp.add_argument("--show", action="store_true", help="print front and back of each card")
+    cp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     ep = sub.add_parser("embed", help="embed new/changed sections (model cached in data/models)")
     ep.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     args = ap.parse_args(argv)
@@ -66,6 +71,20 @@ def main(argv: list[str] | None = None) -> int:
             if bad:
                 print(f"PRIVACY ERROR: {bad}", file=sys.stderr)
                 return 3
+        return 0
+
+    if args.cmd == "cards":
+        from .cards import list_cards
+        with Index(args.db or default_db_path(), root) as ix:
+            ix.update()
+            res = list_cards(ix, kind=args.kind)
+        for c in res["cards"]:
+            if args.show:
+                print(f"[{c['kind']}] {c['id']}  ({c['rel']}:{c['line']})\n  Q: {c['front']}\n  A: {c['back']}\n")
+            else:
+                print(f"{c['kind']:<7} {c['id']:<16} {c['rel']}:{c['line']}  {c['front'][:70]}")
+        print(f"{len(res['cards'])} of {res['total']} cards; "
+              + ", ".join(f"{k}={v}" for k, v in res["counts"].items()))
         return 0
 
     if args.cmd == "embed":

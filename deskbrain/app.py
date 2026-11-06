@@ -9,6 +9,7 @@ Endpoints
   GET  /api/graph?folders=      page/folder nodes, link/folder edges, broken links
   GET  /api/doubts?status=&area=&q=
                                 doubts board: open/answered doubts with page + anchor
+  GET  /api/cards?kind=&area=   flashcards built from answered doubts and findings
   POST /api/reindex             incremental re-index of the desk
   GET  /                        the single-page frontend (static/index.html)
 
@@ -31,6 +32,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .bm25 import BM25Index, snippet, tokenize
 from .config import desk_path
+from .cards import list_cards
 from .doubts import list_doubts
 from .graph import build_graph
 from .links import slugify
@@ -160,6 +162,12 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
                area: str = Query("", max_length=200), q: str = Query("", max_length=500)):
         with state.lock:
             return list_doubts(state.index, status=status, area=area, q=q)
+
+    @app.get("/api/cards")
+    def cards(kind: str = Query("all", pattern="^(all|qa|lead|cloze|recall)$"),
+              area: str = Query("", max_length=200)):
+        with state.lock:
+            return list_cards(state.index, kind=kind, area=area)
 
     @app.post("/api/reindex")
     def reindex():

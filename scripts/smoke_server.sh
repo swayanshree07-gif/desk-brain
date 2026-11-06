@@ -22,6 +22,8 @@ echo "info default search mode: $mode"
 check graph         200 $URL/api/graph
 check doubts        200 "$URL/api/doubts?status=open"
 check doubts-bad    422 "$URL/api/doubts?status=bogus"
+check cards         200 $URL/api/cards
+check cards-bad     422 "$URL/api/cards?kind=bogus"
 check home          200 $URL/
 check graph.js      200 $URL/static/graph.js
 check app.js        200 $URL/static/app.js
