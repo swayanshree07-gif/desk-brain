@@ -11,6 +11,9 @@ Usage:
       /api/health /api/doubts?area=&q=
   firefox --headless --no-remote --profile data/tmp/ffprof --window-size=1400,1000 \\
       --screenshot $PWD/data/tmp/x.png "file://$PWD/OUT.html#/doubts"
+  --after JS   runs JS on DOMContentLoaded (after the stubbed fetches resolved), e.g.
+      to press a key: --after 'document.dispatchEvent(new KeyboardEvent("keydown", {key: " "}))'
+  POST requests get {} back (nothing is written anywhere).
 Write OUT into data/ (git-ignored): it contains desk text.
 """
 
@@ -29,6 +32,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--desk", type=Path, default=None)
 ap.add_argument("out", type=Path)
 ap.add_argument("urls", nargs="+")
+ap.add_argument("--after", default="", help="JS to run after the route rendered")
 a = ap.parse_args()
 with tempfile.TemporaryDirectory() as td:
     app = create_app(a.desk, Path(td) / "ix.sqlite", semantic=False)
@@ -39,7 +43,10 @@ blob = json.dumps(data).replace("</", "<\\/")
 body = (STATIC_DIR / "index.html").read_text()
 body = body.replace('href="/static/', f'href="file://{STATIC_DIR}/').replace('src="/static/', f'src="file://{STATIC_DIR}/')
 stub = f"""<script>const SNAP = {blob};
-window.fetch = (u) => Promise.resolve(SNAP[u] ? {{ ok: true, json: () => Promise.resolve(SNAP[u]) }}
+window.fetch = (u, o) => Promise.resolve(o && o.method === "POST" ? {{ ok: true, json: () => Promise.resolve({{}}) }}
+  : SNAP[u] ? {{ ok: true, json: () => Promise.resolve(SNAP[u]) }}
   : {{ ok: false, status: 404, statusText: "not in snapshot: " + u, json: () => Promise.resolve({{}}) }});</script>"""
+if a.after:
+    body = body.replace("</body>", f"<script>document.addEventListener('DOMContentLoaded', () => {{ {a.after} }});</script>\n</body>")
 a.out.write_text(body.replace("<script", stub + "\n<script", 1))
 print(f"wrote {a.out} with {len(data)} API responses")

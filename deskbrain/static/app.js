@@ -4,6 +4,7 @@
 //   #/page/<rel>?h=x   one page, scrolled to heading x
 //   #/graph?area=&folders=1&orphans=0   knowledge graph (graph.js)
 //   #/doubts?area=&q=  doubts board (open / answered columns)
+//   #/review           flashcard review: due + new cards, reveal, grade 0–5 (SM-2)
 "use strict";
 
 const $ = (s) => document.querySelector(s);
@@ -33,6 +34,8 @@ async function route() {
       await showGraph(params);
     } else if (path === "/doubts") {
       await showDoubts(params);
+    } else if (path === "/review") {
+      await showReview();
     } else if (path.startsWith("/page/")) {
       const rel = path.slice(6).split("/").map(decodeURIComponent).join("/");
       await showPage(rel, params.get("h"));
@@ -147,6 +150,61 @@ async function showDoubts(params) {
   $("#d-form").onsubmit = (e) => { e.preventDefault(); go($("#d-area").value, $("#d-q").value.trim()); };
 }
 
+// ---- flashcard review (#/review) ----
+const GRADES = [["0", "blank"], ["1", "wrong"], ["2", "almost"], ["3", "hard"], ["4", "good"], ["5", "easy"]];
+const KIND_LABEL = { qa: "question", lead: "finding", cloze: "fill the gap", recall: "recall" };
+// Escape first, then turn **bold** and `code` into tags (input is already escaped, so this is safe).
+const inlineMd = (t) => esc(t).replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+let session = null;   // { queue: [...cards], pos, shown, done: {grade: n}, today }
+
+async function showReview() {
+  document.title = "Review — Desk Brain";
+  const r = await api("/api/review");
+  session = { queue: r.due.concat(r.new), pos: 0, shown: false, done: {}, counts: r.counts, today: r.today };
+  drawReview();
+}
+
+function drawReview() {
+  const s = session, c = s.queue[s.pos];
+  const head = `<p class="muted">${esc(s.today)} · ${s.counts.due} due · ${s.counts.new} new today ·
+    ${s.counts.later} scheduled later · ${s.counts.total} cards</p>`;
+  if (!c) {
+    const n = Object.values(s.done).reduce((a, b) => a + b, 0);
+    const lapses = (s.done[0] || 0) + (s.done[1] || 0) + (s.done[2] || 0);
+    main.innerHTML = head + `<p class="empty">${n ? `Done: ${n} card${n === 1 ? "" : "s"} reviewed` +
+      (lapses ? `, ${lapses} to see again tomorrow` : "") + "." : "Nothing to review today. 🎉"}</p>`;
+    return;
+  }
+  const kind = c.review ? `review · every ${c.review.interval} d` : "new";
+  main.innerHTML = head + `<div class="fc" data-id="${esc(c.id)}">
+    <div class="muted">${s.pos + 1} / ${s.queue.length} · ${esc(KIND_LABEL[c.kind] || c.kind)} · ${esc(kind)}</div>
+    <div class="fc-front">${inlineMd(c.front)}</div>
+    ${s.shown ? `<div class="fc-back">${inlineMd(c.back)}</div>
+      <div class="muted">from <a href="${pageHref(c.rel, c.anchor)}">${esc(c.page_title)}</a>${c.section ? " › " + esc(c.section) : ""}</div>
+      <div class="fc-grades">${GRADES.map(([g, label]) =>
+        `<button type="button" data-g="${g}" class="g${g}">${g} <small>${label}</small></button>`).join("")}</div>
+      <p class="muted">Keys 0–5 grade · 0–2 = forgot (back tomorrow), 3–5 = remembered.</p>`
+    : `<button type="button" id="fc-show">Show answer <small>(space)</small></button>`}</div>`;
+  if (!s.shown) $("#fc-show").onclick = revealCard;
+  else main.querySelectorAll(".fc-grades button").forEach((b) => { b.onclick = () => gradeCard(+b.dataset.g); });
+}
+
+function revealCard() { if (session && !session.shown) { session.shown = true; drawReview(); } }
+
+async function gradeCard(g) {
+  const s = session, c = s && s.queue[s.pos];
+  if (!c || !s.shown || s.busy) return;
+  s.busy = true;
+  try {
+    await api("/api/review/grade", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: c.id, grade: g }) });
+    s.done[g] = (s.done[g] || 0) + 1;
+    s.pos += 1; s.shown = false;
+    drawReview();
+  } catch (e) { $("#status").textContent = "grading failed: " + e.message; }
+  finally { s.busy = false; }
+}
+
 $("#search-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#q").value.trim();
@@ -164,7 +222,11 @@ $("#reindex").addEventListener("click", async () => {
   } catch (e) { $("#status").textContent = "re-index failed: " + e.message; }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); }
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey || parseHash().path !== "/review" || !session) return;
+  if ((e.key === " " || e.key === "Enter") && !session.shown) { e.preventDefault(); revealCard(); }
+  else if (/^[0-5]$/.test(e.key) && session.shown) { e.preventDefault(); gradeCard(+e.key); }
 });
 window.addEventListener("hashchange", route);
 $("#mode").value = localStorage.getItem("deskbrain.mode") || "hybrid";

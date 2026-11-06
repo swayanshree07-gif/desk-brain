@@ -115,6 +115,7 @@ def test_private_text_never_in_api(client, desk):
     for q in ("", "diary", "secret"):
         bodies.append(client.get("/api/doubts", params={"q": q}).text)
     bodies.append(client.get("/api/cards").text)
+    bodies.append(client.get("/api/review", params={"new": 500}).text)
     blob = "\n".join(bodies)
     for s in secret_lines:
         assert s not in blob, s

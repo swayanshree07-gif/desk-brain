@@ -7,6 +7,7 @@
   index    build / incrementally update the SQLite index in data/
   search   section search: deskbrain search "query" [-k N] [--all-sections] [--mode hybrid|keyword|semantic]
   cards    update the index, then list flashcards: deskbrain cards [--kind K] [--show]
+  review   today's spaced-repetition queue (due + new cards): deskbrain review [--new N]
   embed    update the index, then embed new/changed sections into data/index-vectors.npy
 """
 
@@ -49,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--kind", choices=("all", "qa", "lead", "cloze", "recall"), default="all")
     cp.add_argument("--show", action="store_true", help="print front and back of each card")
     cp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
+    rp = sub.add_parser("review", help="show today's flashcard queue (state in data/flashcards.sqlite)")
+    rp.add_argument("--new", type=int, default=20, help="new cards per day (default 20)")
+    rp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     ep = sub.add_parser("embed", help="embed new/changed sections (model cached in data/models)")
     ep.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     args = ap.parse_args(argv)
@@ -85,6 +89,27 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{c['kind']:<7} {c['id']:<16} {c['rel']}:{c['line']}  {c['front'][:70]}")
         print(f"{len(res['cards'])} of {res['total']} cards; "
               + ", ".join(f"{k}={v}" for k, v in res["counts"].items()))
+        return 0
+
+    if args.cmd == "review":
+        from .cards import list_cards
+        from .review import ReviewStore, default_review_path, due_queue
+        db = args.db or default_db_path()
+        with Index(db, root) as ix:
+            ix.update()
+            cards = list_cards(ix)["cards"]
+        rs = ReviewStore(default_review_path(db))
+        try:
+            q = due_queue(cards, rs, new_per_day=args.new)
+        finally:
+            rs.close()
+        for c in q["due"]:
+            print(f"due {c['review']['due']}  {c['id']:<16} {c['front'][:70]}")
+        for c in q["new"]:
+            print(f"new             {c['id']:<16} {c['front'][:70]}")
+        n = q["counts"]
+        print(f"{q['today']}: {n['due']} due, {n['new']} new today ({n['new_total']} unseen), "
+              f"{n['later']} scheduled later, {n['total']} cards")
         return 0
 
     if args.cmd == "embed":

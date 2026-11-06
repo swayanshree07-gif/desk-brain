@@ -24,6 +24,9 @@ check doubts        200 "$URL/api/doubts?status=open"
 check doubts-bad    422 "$URL/api/doubts?status=bogus"
 check cards         200 $URL/api/cards
 check cards-bad     422 "$URL/api/cards?kind=bogus"
+check review        200 $URL/api/review
+check grade-unknown 404 -X POST -H "Content-Type: application/json" -d '{"id":"nope","grade":3}' $URL/api/review/grade
+check grade-bad     422 -X POST -H "Content-Type: application/json" -d '{"id":"nope","grade":9}' $URL/api/review/grade
 check home          200 $URL/
 check graph.js      200 $URL/static/graph.js
 check app.js        200 $URL/static/app.js

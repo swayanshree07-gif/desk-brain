@@ -4,7 +4,8 @@ A local web app (in progress, 30-day project) that runs on top of the Markdown k
 in `~/Personal-Desk`. Working now: keyword + semantic (meaning) + hybrid search, a read-only
 page view, a knowledge-graph view of pages and links, and a doubts board (`### 🔴 Q:` open /
 `### 🟢 Q:` answered), and flashcards built automatically from answered doubts and dated
-findings (API + CLI so far). Planned: spaced-repetition review UI, and a weekly digest. It will serve on `127.0.0.1:8765` only, started with `./run.sh`.
+findings, reviewed with SM-2 spaced repetition in the browser. Planned: card lifecycle (edited /
+deleted cards) and a weekly digest. It serves on `127.0.0.1:8765` only, started with `./run.sh`.
 
 **Privacy rules:** the desk is read-only to this app. `activity/`, `Personal/`, `tools/`,
 `_templates/` (and any `_template/` folder or hidden folder) are never indexed or shown.
@@ -36,6 +37,7 @@ python3 -m venv .venv
 .venv/bin/python -m deskbrain index [-v]         # build / incrementally update data/index.sqlite
 .venv/bin/python -m deskbrain search "sourdough starter"   # hybrid search (-k N, --all-sections, --mode keyword|semantic|hybrid)
 .venv/bin/python -m deskbrain cards [--kind qa|lead|cloze|recall] [--show]   # flashcards from answered doubts + findings
+.venv/bin/python -m deskbrain review [--new 20]    # today's study queue (due + new cards); state in data/flashcards.sqlite
 .venv/bin/python -m deskbrain embed     # embed new/changed sections into data/index-vectors.* (downloads the ~90 MB model to data/models once)
 .venv/bin/python -m deskbrain --desk tests/fixtures/desk scan   # any command against the sample desk
 ```
@@ -48,6 +50,8 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `GET /api/graph?folders=true` — page + folder nodes (degree, doubts, findings, bad links, orphan flag), deduplicated link edges, folder edges, broken-link list
 - `GET /api/doubts?status=all|open|answered&area=…&q=…` — doubts board: question, status, asked, context, answer, page, line, heading `anchor`, stable `id`; plus whole-desk counts and areas
 - `GET /api/cards?kind=all|qa|lead|cloze|recall&area=…` — flashcards: stable `id`, `kind`, `front`, `back`, page, line, anchor, content `hash`; plus counts per kind and areas
+- `GET /api/review?new=20` — today's queue: `due` cards (with their SM-2 `review` state, most overdue first) and up to `new` unseen cards per day; plus counts
+- `POST /api/review/grade` with JSON `{"id": card id, "grade": 0–5}` — records a review, returns the new schedule (404 for unknown cards)
 - `GET /api/page?rel=…` — rendered page (no raw HTML; links rewritten to in-app routes), headings, links, backlinks
 - `POST /api/reindex` — incremental re-index
 
@@ -56,13 +60,14 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `#/graph` — knowledge graph (canvas): colour = area, size = links, red ring = has bad links, dashed ring = orphan;
   area filter, folder/orphan toggles, highlight box; drag to pan, wheel to zoom, click a page to open it
 - `#/doubts` — open / answered columns, area filter, search within doubts; each card links to the doubt in its page
+- `#/review` — flashcard review: front → **Show answer** (space) → grade 0–5 (keys 0–5; 0–2 = forgot, back tomorrow), link to the source section
 
 ## Checks
 ```bash
 .venv/bin/pytest -q                      # all tests (embedding tests skip until the model is downloaded)
 scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls endpoints, stops it
 .venv/bin/python scripts/check_pages.py  # renders every page; fails on unsafe hrefs / private paths
-.venv/bin/python scripts/ui_preview.py data/x.html /api/health /api/graph   # snapshot page for headless screenshots
+.venv/bin/python scripts/ui_preview.py data/x.html /api/health /api/graph   # snapshot page for headless screenshots (--after JS to press keys)
 ```
 
 ## Layout
@@ -78,14 +83,15 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `deskbrain/graph.py` — knowledge-graph nodes and edges from the index
 - `deskbrain/doubts.py` — doubts board data (stable ids, filters, heading anchors)
 - `deskbrain/cards.py` — flashcard generation (Q→A from 🟢 doubts; lead / cloze / recall cards from findings)
+- `deskbrain/review.py` — SM-2 scheduling, review state + log in `data/flashcards.sqlite`, due queue
 - `deskbrain/render.py` — safe Markdown → HTML for the page view
 - `deskbrain/app.py` — FastAPI app; `deskbrain/static/` — plain HTML/JS/CSS frontend (`graph.js` = graph view)
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 7 of 30 (ahead of plan, through planned Day 19): indexing, keyword/semantic/hybrid search,
+Day 8 of 30 (ahead of plan, through planned Day 21): indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), privacy/safety tests, incremental embeddings, the graph view
-(area filter, orphan and bad-link highlighting), the doubts board (API + UI) and flashcard
-generation (API + CLI, no review UI yet); 167 tests.
-Next: spaced repetition (SM-2) state in `data/flashcards.sqlite` and a due queue (planned Day 20).
+(area filter, orphan and bad-link highlighting), the doubts board (API + UI), flashcard
+generation and SM-2 spaced-repetition review (API, CLI and UI); 189 tests.
+Next: card lifecycle — keep review history when a card's text changes on the desk, retire deleted cards (planned Day 22).
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

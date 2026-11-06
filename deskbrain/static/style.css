@@ -60,3 +60,10 @@ main.wide { max-width: none; }
 .doubt .d-q { font-weight: 600; }
 .d-ctx, .d-ans { margin-top: .3rem; font-size: .92rem; white-space: pre-line; }
 #d-form { margin: 0; }
+.fc { max-width: 40rem; margin: 1rem auto; padding: 1.2rem 1.4rem; border: 1px solid var(--line); border-radius: 10px; }
+.fc-front { font-size: 1.2rem; font-weight: 600; margin: .6rem 0 1rem; white-space: pre-line; }
+.fc-back { padding: .8rem 0; margin-bottom: .6rem; border-top: 1px dashed var(--line); white-space: pre-line; }
+.fc-grades { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 .3rem; }
+.fc-grades button { min-width: 4.5rem; }
+.fc-grades .g0, .fc-grades .g1, .fc-grades .g2 { border-color: #d64545; }
+.fc-grades .g4, .fc-grades .g5 { border-color: #3c9a4c; }

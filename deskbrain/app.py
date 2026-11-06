@@ -10,6 +10,8 @@ Endpoints
   GET  /api/doubts?status=&area=&q=
                                 doubts board: open/answered doubts with page + anchor
   GET  /api/cards?kind=&area=   flashcards built from answered doubts and findings
+  GET  /api/review?new=          today's study queue: due cards + new cards (SM-2)
+  POST /api/review/grade        {"id": card id, "grade": 0-5} -> new schedule
   POST /api/reindex             incremental re-index of the desk
   GET  /                        the single-page frontend (static/index.html)
 
@@ -25,7 +27,10 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from datetime import date
+from typing import Callable
+
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -37,6 +42,7 @@ from .doubts import list_doubts
 from .graph import build_graph
 from .links import slugify
 from .render import render_page
+from .review import NEW_PER_DAY, ReviewStore, default_review_path, due_queue
 from .scanner import is_allowed, read_page
 from .search import HybridSearcher, vectors_base
 from .store import Index, default_db_path
@@ -55,10 +61,13 @@ def snippet_html(text: str, terms: list[str], width: int = 200) -> str:
 class DeskState:
     """Index + in-memory BM25, shared by request threads under one lock."""
 
-    def __init__(self, root: Path, db_path: Path, semantic: bool | None = None):
+    def __init__(self, root: Path, db_path: Path, semantic: bool | None = None,
+                 review_path: Path | None = None):
         self.root = Path(root).expanduser().resolve()
         self.lock = threading.RLock()
         self.index = Index(db_path, self.root)
+        # Review state (SM-2) lives next to the index: data/flashcards.sqlite.
+        self.reviews = ReviewStore(review_path or default_review_path(db_path))
         self.bm25: BM25Index | None = None
         self.last_stats = None
         self.last_embed: dict | None = None
@@ -81,11 +90,13 @@ class DeskState:
     def close(self) -> None:
         with self.lock:
             self.index.close()
+            self.reviews.close()
 
 
 def create_app(root: Path | str | None = None, db_path: Path | str | None = None,
-               semantic: bool | None = None) -> FastAPI:
-    """``semantic``: None = use embeddings if the model is downloaded; False = keyword only."""
+               semantic: bool | None = None, today: Callable[[], date] = date.today) -> FastAPI:
+    """``semantic``: None = use embeddings if the model is downloaded; False = keyword only.
+    ``today``: clock for the review queue (tests pass a fake one)."""
     state = DeskState(Path(root) if root else desk_path(), Path(db_path) if db_path else default_db_path(),
                       semantic=semantic)
     state.reindex()
@@ -168,6 +179,21 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
               area: str = Query("", max_length=200)):
         with state.lock:
             return list_cards(state.index, kind=kind, area=area)
+
+    @app.get("/api/review")
+    def review(new: int = Query(NEW_PER_DAY, ge=0, le=500)):
+        with state.lock:
+            cards = list_cards(state.index)["cards"]
+        return due_queue(cards, state.reviews, today=today(), new_per_day=new)
+
+    @app.post("/api/review/grade")
+    def grade(id: str = Body(..., max_length=100), grade: int = Body(..., ge=0, le=5)):
+        with state.lock:
+            card = next((c for c in list_cards(state.index)["cards"] if c["id"] == id), None)
+        if card is None:
+            raise HTTPException(404, "no such card")
+        st = state.reviews.grade(id, grade, today=today(), card_hash=card["hash"])
+        return {"id": id, "grade": grade, "review": st.__dict__}
 
     @app.post("/api/reindex")
     def reindex():
