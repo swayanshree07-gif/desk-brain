@@ -74,8 +74,13 @@ def test_store_persists_and_logs(tmp_path):
     rs.close()
 
 
+WORDS = ["apple orchard pruning", "binary search trees", "cast iron seasoning", "dorian mode scale",
+         "espresso extraction time", "fermentation of kimchi"]
+
+
 def _cards(n):
-    return [{"id": f"c{i}", "rel": "a.md", "line": i, "front": f"f{i}"} for i in range(n)]
+    return [{"id": f"c{i}", "rel": "a.md", "line": i, "front": WORDS[i], "back": WORDS[i][::-1], "kind": "lead",
+             "date": "2026-11-01", "hash": f"h{i}"} for i in range(n)]
 
 
 def test_due_queue(tmp_path):
@@ -83,7 +88,7 @@ def test_due_queue(tmp_path):
     cards = _cards(6)
     q = due_queue(cards, rs, today=D0, new_per_day=3)
     assert [c["id"] for c in q["new"]] == ["c0", "c1", "c2"] and q["due"] == []
-    assert q["counts"] == {"due": 0, "new": 3, "new_total": 6, "later": 0, "total": 6}
+    assert q["counts"] == {"due": 0, "new": 3, "new_total": 6, "later": 0, "total": 6, "retired": 0}
     for cid in ("c0", "c1"):
         rs.grade(cid, 4, D0)
     rs.grade("c2", 1, D0)
@@ -95,9 +100,10 @@ def test_due_queue(tmp_path):
     assert {c["id"] for c in q["due"]} == {"c0", "c1", "c2"}
     assert [c["id"] for c in q["new"]] == ["c3", "c4", "c5"]
     assert q["due"][0]["review"]["reps"] in (0, 1)
-    # a card with state but no longer on the desk is ignored
+    # a card with state but no longer on the desk is retired (Day 22), not shown
     q = due_queue(cards[1:], rs, today=D0 + timedelta(1), new_per_day=0)
     assert {c["id"] for c in q["due"]} == {"c1", "c2"} and q["counts"]["total"] == 5
+    assert q["counts"]["retired"] == 1 and q["changes"]["retired"] == 1
     rs.close()
 
 
@@ -121,7 +127,7 @@ def test_api_review_and_grade(desk, tmp_path):
         assert r.status_code == 200
         assert r.json()["review"]["due"] == "2026-11-07" and r.json()["review"]["interval"] == 1
         assert c.get("/api/review", params={"new": 20}).json()["counts"] == \
-            {"due": 0, "new": 7, "new_total": 7, "later": 1, "total": 8}
+            {"due": 0, "new": 7, "new_total": 7, "later": 1, "total": 8, "retired": 0}
         clock["d"] = D0 + timedelta(1)
         q = c.get("/api/review").json()
         assert [x["id"] for x in q["due"]] == [cid] and q["due"][0]["review"]["reps"] == 1

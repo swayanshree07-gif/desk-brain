@@ -4,11 +4,12 @@ A local web app (in progress, 30-day project) that runs on top of the Markdown k
 in `~/Personal-Desk`. Working now: keyword + semantic (meaning) + hybrid search, a read-only
 page view, a knowledge-graph view of pages and links, and a doubts board (`### 🔴 Q:` open /
 `### 🟢 Q:` answered), and flashcards built automatically from answered doubts and dated
-findings, reviewed with SM-2 spaced repetition in the browser. Planned: card lifecycle (edited /
-deleted cards) and a weekly digest. It serves on `127.0.0.1:8765` only, started with `./run.sh`.
+findings, reviewed with SM-2 spaced repetition in the browser (edited cards keep their
+schedule, deleted ones are retired). Planned: a weekly digest. It serves on `127.0.0.1:8765` only, started with `./run.sh`.
 
 **Privacy rules:** the desk is read-only to this app. `activity/`, `Personal/`, `tools/`,
-`_templates/` (and any `_template/` folder or hidden folder) are never indexed or shown.
+`_templates/` (and any `_template/` folder or hidden folder) are never indexed or shown; these
+names are matched case-insensitively, and symlinks are never followed or read.
 Index data lives in `data/` (git-ignored); tests use the made-up desk in `tests/fixtures/desk/`.
 
 ## Run
@@ -52,6 +53,8 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `GET /api/cards?kind=all|qa|lead|cloze|recall&area=…` — flashcards: stable `id`, `kind`, `front`, `back`, page, line, anchor, content `hash`; plus counts per kind and areas
 - `GET /api/review?new=20` — today's queue: `due` cards (with their SM-2 `review` state, most overdue first) and up to `new` unseen cards per day; plus counts
 - `POST /api/review/grade` with JSON `{"id": card id, "grade": 0–5}` — records a review, returns the new schedule (404 for unknown cards)
+- `GET /api/review/retired` — studied cards that are gone from the desk (id, page, kind, schedule; their text is not kept)
+- `GET /api/review/card?id=` — one live card's schedule, grade log and lifecycle events (edited / renamed / retired / revived)
 - `GET /api/page?rel=…` — rendered page (no raw HTML; links rewritten to in-app routes), headings, links, backlinks
 - `POST /api/reindex` — incremental re-index
 
@@ -83,15 +86,17 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `deskbrain/graph.py` — knowledge-graph nodes and edges from the index
 - `deskbrain/doubts.py` — doubts board data (stable ids, filters, heading anchors)
 - `deskbrain/cards.py` — flashcard generation (Q→A from 🟢 doubts; lead / cloze / recall cards from findings)
-- `deskbrain/review.py` — SM-2 scheduling, review state + log in `data/flashcards.sqlite`, due queue
+- `deskbrain/review.py` — SM-2 scheduling, review state + log in `data/flashcards.sqlite`, due queue, card lifecycle (`reconcile`)
 - `deskbrain/render.py` — safe Markdown → HTML for the page view
 - `deskbrain/app.py` — FastAPI app; `deskbrain/static/` — plain HTML/JS/CSS frontend (`graph.js` = graph view)
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 8 of 30 (ahead of plan, through planned Day 21): indexing, keyword/semantic/hybrid search,
-read-only page view (`./run.sh`), privacy/safety tests, incremental embeddings, the graph view
-(area filter, orphan and bad-link highlighting), the doubts board (API + UI), flashcard
-generation and SM-2 spaced-repetition review (API, CLI and UI); 189 tests.
-Next: card lifecycle — keep review history when a card's text changes on the desk, retire deleted cards (planned Day 22).
+Day 9 of 30 (ahead of plan, through planned Day 22): indexing, keyword/semantic/hybrid search,
+read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
+endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
+and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
+spaced-repetition review (API, CLI and UI) and the card lifecycle (edits keep history, changed
+ids carry state over, deleted cards retire); 238 tests.
+Next: weekly digest data — pages changed, new/answered doubts, new findings per week (planned Day 23).
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

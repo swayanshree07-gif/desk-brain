@@ -12,6 +12,8 @@ Endpoints
   GET  /api/cards?kind=&area=   flashcards built from answered doubts and findings
   GET  /api/review?new=          today's study queue: due cards + new cards (SM-2)
   POST /api/review/grade        {"id": card id, "grade": 0-5} -> new schedule
+  GET  /api/review/retired      cards gone from the desk (review state kept)
+  GET  /api/review/card?id=     one card's state, grade log and lifecycle events
   POST /api/reindex             incremental re-index of the desk
   GET  /                        the single-page frontend (static/index.html)
 
@@ -192,8 +194,31 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
             card = next((c for c in list_cards(state.index)["cards"] if c["id"] == id), None)
         if card is None:
             raise HTTPException(404, "no such card")
-        st = state.reviews.grade(id, grade, today=today(), card_hash=card["hash"])
+        with state.lock:
+            cards_now = list_cards(state.index)["cards"]
+        state.reviews.reconcile(cards_now, today())
+        st = state.reviews.grade(id, grade, today=today(), card=card)
         return {"id": id, "grade": grade, "review": st.__dict__}
+
+    @app.get("/api/review/retired")
+    def review_retired():
+        """Cards that had review state but are gone from the desk (Day 22)."""
+        with state.lock:
+            cards_now = list_cards(state.index)["cards"]
+        state.reviews.reconcile(cards_now, today())
+        items = state.reviews.retired()
+        return {"retired": items, "count": len(items)}
+
+    @app.get("/api/review/card")
+    def review_card(id: str = Query(..., max_length=100)):
+        """Review state, grade log and lifecycle events of one live card (404 for retired)."""
+        with state.lock:
+            live = any(c["id"] == id for c in list_cards(state.index)["cards"])
+        st = state.reviews.get(id)
+        if st is None or not live:
+            raise HTTPException(404, "no review state")
+        return {"id": id, "review": st.__dict__, "grades": state.reviews.history(id),
+                "events": state.reviews.events(id)}
 
     @app.post("/api/reindex")
     def reindex():

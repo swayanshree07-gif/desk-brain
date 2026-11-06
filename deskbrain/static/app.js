@@ -167,7 +167,9 @@ async function showReview() {
 function drawReview() {
   const s = session, c = s.queue[s.pos];
   const head = `<p class="muted">${esc(s.today)} · ${s.counts.due} due · ${s.counts.new} new today ·
-    ${s.counts.later} scheduled later · ${s.counts.total} cards</p>`;
+    ${s.counts.later} scheduled later · ${s.counts.total} cards` +
+    (s.counts.retired ? ` · <span title="cards you studied that are gone from the desk (schedule kept)">${s.counts.retired} retired</span>` : "") +
+    `</p>`;
   if (!c) {
     const n = Object.values(s.done).reduce((a, b) => a + b, 0);
     const lapses = (s.done[0] || 0) + (s.done[1] || 0) + (s.done[2] || 0);

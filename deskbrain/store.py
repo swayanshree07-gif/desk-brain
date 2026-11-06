@@ -27,7 +27,7 @@ from pathlib import Path
 from .chunker import Chunk, chunk_page
 from .links import LinkResolver
 from .parser import Heading, Link, Page, parse
-from .scanner import is_allowed, read_page, scan
+from .scanner import in_private_area, is_allowed, read_page, scan
 
 SCHEMA_VERSION = 1
 
@@ -268,8 +268,14 @@ class Index:
     def check_privacy(self) -> list[str]:
         """Rels in the index that should never be there (must be empty)."""
         bad = [r for r in self.page_rels() if not is_allowed(r)]
-        bad += [r[0] for r in self.db.execute("SELECT DISTINCT rel FROM chunks") if not is_allowed(r[0])]
-        return bad
+        for sql in ("SELECT DISTINCT rel FROM chunks", "SELECT DISTINCT rel FROM headings",
+                    "SELECT DISTINCT rel FROM doubts", "SELECT DISTINCT rel FROM findings",
+                    "SELECT DISTINCT src FROM links"):
+            bad += [r[0] for r in self.db.execute(sql) if r[0] and not is_allowed(r[0])]
+        bad += [r[0] for r in self.db.execute(
+            "SELECT DISTINCT target FROM links WHERE target IS NOT NULL AND kind<>'external'")
+            if r[0] and in_private_area(r[0])]
+        return sorted(set(bad))
 
 
 def default_db_path() -> Path:

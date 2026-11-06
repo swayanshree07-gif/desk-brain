@@ -109,7 +109,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"new             {c['id']:<16} {c['front'][:70]}")
         n = q["counts"]
         print(f"{q['today']}: {n['due']} due, {n['new']} new today ({n['new_total']} unseen), "
-              f"{n['later']} scheduled later, {n['total']} cards")
+              f"{n['later']} scheduled later, {n['total']} cards, {n['retired']} retired")
+        ch = q["changes"]
+        if any(ch.values()):
+            print("lifecycle: " + ", ".join(f"{k}={v}" for k, v in ch.items()))
         return 0
 
     if args.cmd == "embed":
