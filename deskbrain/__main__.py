@@ -8,6 +8,7 @@
   search   section search: deskbrain search "query" [-k N] [--all-sections] [--mode hybrid|keyword|semantic]
   cards    update the index, then list flashcards: deskbrain cards [--kind K] [--show]
   review   today's spaced-repetition queue (due + new cards): deskbrain review [--new N]
+  digest   weekly digest: deskbrain digest [--week 2026-W45 | --week 2026-11-03] (default: last 7 days)
   embed    update the index, then embed new/changed sections into data/index-vectors.npy
 """
 
@@ -53,6 +54,9 @@ def main(argv: list[str] | None = None) -> int:
     rp = sub.add_parser("review", help="show today's flashcard queue (state in data/flashcards.sqlite)")
     rp.add_argument("--new", type=int, default=20, help="new cards per day (default 20)")
     rp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
+    dp = sub.add_parser("digest", help="what changed in a week, what is still open")
+    dp.add_argument("--week", default=None, help="ISO week (2026-W45) or a date in it; default: last 7 days")
+    dp.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     ep = sub.add_parser("embed", help="embed new/changed sections (model cached in data/models)")
     ep.add_argument("--db", type=Path, default=None, help="index file (default: data/index.sqlite)")
     args = ap.parse_args(argv)
@@ -113,6 +117,38 @@ def main(argv: list[str] | None = None) -> int:
         ch = q["changes"]
         if any(ch.values()):
             print("lifecycle: " + ", ".join(f"{k}={v}" for k, v in ch.items()))
+        return 0
+
+    if args.cmd == "digest":
+        from .digest import build_digest, window
+        try:
+            start, end = window(args.week)
+        except ValueError:
+            print("--week must look like 2026-W45 or 2026-11-03", file=sys.stderr)
+            return 2
+        with Index(args.db or default_db_path(), root) as ix:
+            ix.update()
+            dg = build_digest(ix, start, end)
+        c = dg["counts"]
+        print(f"Digest {dg['week'] or 'last 7 days'}: {dg['start']} – {dg['end']}")
+        print(f"{c['changed']} pages changed ({c['new_pages']} new, {c['removed']} removed), {c['new_doubts']} new doubts, "
+              f"{c['answered']} answered, {c['findings']} findings, {c['open']} still open")
+        if not dg["tracking"]["complete"]:
+            print(f"(answers/new pages tracked since {dg['tracking']['since']})")
+        for label, rows in (
+                ("Answered", [f"🟢 {d['question']}  ({d['rel']}, {d['answered_day']})" for d in dg["doubts"]["answered"]]),
+                ("New doubts", [f"{'🔴' if d['status'] == 'open' else '🟢'} {d['question']}  ({d['rel']})"
+                                for d in dg["doubts"]["new"]]),
+                ("Findings", [f"{f['date']} {f['text'][:90]}  ({f['rel']})" for f in dg["findings"]]),
+                ("Pages changed", [f"{p['day']} {'+' if p['new'] else '~'} {p['rel']}" for p in dg["pages"]["changed"]]
+                 + [f"- {r}" for r in dg["pages"]["removed"]]),
+                ("Still open", [f"🔴 {d['question']}  ({d['rel']}, "
+                                f"{'undated' if d['age_days'] is None else str(d['age_days']) + ' d'})"
+                                for d in dg["doubts"]["open"]])):
+            if rows:
+                print(f"\n{label}:")
+                for row in rows:
+                    print("  " + row)
         return 0
 
     if args.cmd == "embed":

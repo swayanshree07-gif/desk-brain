@@ -67,3 +67,13 @@ main.wide { max-width: none; }
 .fc-grades button { min-width: 4.5rem; }
 .fc-grades .g0, .fc-grades .g1, .fc-grades .g2 { border-color: #d64545; }
 .fc-grades .g4, .fc-grades .g5 { border-color: #3c9a4c; }
+.dg-sum { font-size: 1.05rem; }
+.dg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
+@media (max-width: 800px) { .dg-grid { grid-template-columns: 1fr; } }
+.dg-sec h3 { margin: 1.2rem 0 .4rem; }
+.dg-sec ul { padding-left: 1.1rem; margin: 0; }
+.dg-sec li { margin-bottom: .45rem; }
+.dg-empty { padding: .3rem 0; }
+.dg-ans { font-size: .92rem; white-space: pre-line; }
+.age { font-size: .8rem; padding: 0 .4rem; border-radius: 8px; border: 1px solid var(--line); }
+.age.old { border-color: #d64545; color: #d64545; }

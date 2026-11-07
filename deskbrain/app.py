@@ -14,6 +14,8 @@ Endpoints
   POST /api/review/grade        {"id": card id, "grade": 0-5} -> new schedule
   GET  /api/review/retired      cards gone from the desk (review state kept)
   GET  /api/review/card?id=     one card's state, grade log and lifecycle events
+  GET  /api/digest?week=        weekly digest: changed pages, new/answered/open doubts,
+                                new findings; week = 2026-W45 or a date (default: last 7 days)
   POST /api/reindex             incremental re-index of the desk
   GET  /                        the single-page frontend (static/index.html)
 
@@ -40,6 +42,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .bm25 import BM25Index, snippet, tokenize
 from .config import desk_path
 from .cards import list_cards
+from .digest import build_digest, window
 from .doubts import list_doubts
 from .graph import build_graph
 from .links import slugify
@@ -219,6 +222,15 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
             raise HTTPException(404, "no review state")
         return {"id": id, "review": st.__dict__, "grades": state.reviews.history(id),
                 "events": state.reviews.events(id)}
+
+    @app.get("/api/digest")
+    def digest(week: str = Query("", max_length=20)):
+        try:
+            start, end = window(week or None, today=today())
+        except ValueError:
+            raise HTTPException(422, "week must look like 2026-W45 or 2026-11-03")
+        with state.lock:
+            return build_digest(state.index, start, end, today=today())
 
     @app.post("/api/reindex")
     def reindex():

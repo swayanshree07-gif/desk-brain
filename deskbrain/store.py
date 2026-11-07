@@ -1,6 +1,14 @@
 """SQLite index of the desk, kept in ``data/`` (git-ignored), with incremental updates.
 
-Tables: pages, headings, chunks, links (raw + resolved), doubts, findings, meta.
+Tables: pages, headings, chunks, links (raw + resolved), doubts, findings, meta, events.
+
+``events`` is the change history for the weekly digest (Day 23): page_added,
+page_removed, doubt_new (detail = status), doubt_answered, doubt_reopened and
+doubt_removed, keyed by page path + doubt id only (no desk text is stored, so
+nothing lingers if a page is later moved into a private folder). Events are
+recorded from the second index build on (the first build is the baseline,
+``meta.history_since``). Times are the page's mtime (when the edit was made),
+clamped to history_since; removals use the time they were noticed.
 
 Incremental re-index (``Index.update``):
   * a page whose (mtime, size) is unchanged is skipped without being read;
@@ -62,6 +70,11 @@ CREATE TABLE IF NOT EXISTS findings (
     rel TEXT NOT NULL, line INTEGER NOT NULL, date TEXT NOT NULL, text TEXT NOT NULL, section TEXT,
     PRIMARY KEY (rel, line)
 );
+CREATE TABLE IF NOT EXISTS events (
+    ts REAL NOT NULL, kind TEXT NOT NULL, rel TEXT NOT NULL, key TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
 """
 
 PAGE_TABLES = (("headings", "rel"), ("chunks", "rel"), ("links", "src"), ("doubts", "rel"), ("findings", "rel"))
@@ -127,8 +140,9 @@ class Index:
         old_root = self.db.execute("SELECT value FROM meta WHERE key='root'").fetchone()
         if old_root is not None and old_root[0] != str(self.root):
             # Index was built for another desk: start over.
-            for t in ("pages", *(t for t, _ in PAGE_TABLES)):
+            for t in ("pages", "events", *(t for t, _ in PAGE_TABLES)):
                 self.db.execute(f"DELETE FROM {t}")
+            self.db.execute("DELETE FROM meta WHERE key='history_since'")
         self.db.execute("INSERT OR REPLACE INTO meta VALUES ('root', ?)", (str(self.root),))
         self.db.commit()
 
@@ -176,7 +190,14 @@ class Index:
         st.scanned = len(files)
         known = {r["rel"]: r for r in self.db.execute("SELECT rel, mtime, size, sha1, first_seen FROM pages")}
         seen = set()
+        since = self.meta("history_since")
+        # First build of an empty index = baseline: nothing is "new" yet.
+        record = bool(known)
         with self.db:
+            if since is None:
+                self.db.execute("INSERT OR REPLACE INTO meta VALUES ('history_since', ?)", (str(now),))
+                since = str(now)
+            since_ts = float(since)
             for f in files:
                 seen.add(f.rel)
                 old = known.get(f.rel)
@@ -190,16 +211,54 @@ class Index:
                     st.touched += 1
                     continue
                 page = parse(text, f.rel)
+                before = self._doubt_states(f.rel) if record else {}
                 self._store_page(page, f.mtime, f.size, sha, old["first_seen"] if old else now, now)
                 (st.changed if old is not None else st.added).append(f.rel)
+                if record:
+                    self._record_events(f.rel, old is None, before, max(min(f.mtime, now), since_ts))
             for rel in sorted(set(known) - seen):
                 self._delete_page(rel)
                 st.removed.append(rel)
+                if record:
+                    self.db.execute("INSERT INTO events (ts, kind, rel) VALUES (?, 'page_removed', ?)", (now, rel))
             if st.n_changed:
                 st.links_resolved = self._resolve_links()
             self.db.execute("INSERT OR REPLACE INTO meta VALUES ('last_update', ?)", (str(now),))
         st.seconds = time.perf_counter() - t0
         return st
+
+    def _doubt_states(self, rel: str) -> dict[str, str]:
+        from .doubts import doubt_id
+        return {doubt_id(rel, r["question"]): r["status"]
+                for r in self.db.execute("SELECT question, status FROM doubts WHERE rel=?", (rel,))}
+
+    def _record_events(self, rel: str, added: bool, before: dict[str, str], ts: float) -> None:
+        """Diff a page's doubts before/after a re-parse into events (ids only, no text)."""
+        after = self._doubt_states(rel)
+        rows = []
+        if added:
+            rows.append((ts, "page_added", rel, "", ""))
+        for did, status in after.items():
+            old = before.get(did)
+            if old is None:
+                rows.append((ts, "doubt_new", rel, did, status))
+            elif old == "open" and status == "answered":
+                rows.append((ts, "doubt_answered", rel, did, ""))
+            elif old == "answered" and status == "open":
+                rows.append((ts, "doubt_reopened", rel, did, ""))
+        rows += [(ts, "doubt_removed", rel, did, "") for did in before if did not in after]
+        self.db.executemany("INSERT INTO events VALUES (?,?,?,?,?)", rows)
+
+    def events(self, start: float | None = None, end: float | None = None) -> list[dict]:
+        """Recorded change events with start <= ts < end, oldest first."""
+        q, args = "SELECT * FROM events WHERE 1=1", []
+        if start is not None:
+            q += " AND ts >= ?"
+            args.append(start)
+        if end is not None:
+            q += " AND ts < ?"
+            args.append(end)
+        return [dict(r) for r in self.db.execute(q + " ORDER BY ts, rowid", args)]
 
     def _resolve_links(self) -> int:
         """Re-resolve every stored link from stored titles/headings (no file reads)."""
@@ -270,7 +329,7 @@ class Index:
         bad = [r for r in self.page_rels() if not is_allowed(r)]
         for sql in ("SELECT DISTINCT rel FROM chunks", "SELECT DISTINCT rel FROM headings",
                     "SELECT DISTINCT rel FROM doubts", "SELECT DISTINCT rel FROM findings",
-                    "SELECT DISTINCT src FROM links"):
+                    "SELECT DISTINCT src FROM links", "SELECT DISTINCT rel FROM events"):
             bad += [r[0] for r in self.db.execute(sql) if r[0] and not is_allowed(r[0])]
         bad += [r[0] for r in self.db.execute(
             "SELECT DISTINCT target FROM links WHERE target IS NOT NULL AND kind<>'external'")

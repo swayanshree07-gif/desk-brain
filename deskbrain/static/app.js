@@ -5,6 +5,7 @@
 //   #/graph?area=&folders=1&orphans=0   knowledge graph (graph.js)
 //   #/doubts?area=&q=  doubts board (open / answered columns)
 //   #/review           flashcard review: due + new cards, reveal, grade 0–5 (SM-2)
+//   #/digest?week=     weekly digest (week = 2026-W45 or a date; none = last 7 days)
 "use strict";
 
 const $ = (s) => document.querySelector(s);
@@ -36,6 +37,8 @@ async function route() {
       await showDoubts(params);
     } else if (path === "/review") {
       await showReview();
+    } else if (path === "/digest") {
+      await showDigest(params.get("week") || "");
     } else if (path.startsWith("/page/")) {
       const rel = path.slice(6).split("/").map(decodeURIComponent).join("/");
       await showPage(rel, params.get("h"));
@@ -205,6 +208,51 @@ async function gradeCard(g) {
     drawReview();
   } catch (e) { $("#status").textContent = "grading failed: " + e.message; }
   finally { s.busy = false; }
+}
+
+// ---- weekly digest (#/digest) ----
+const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+function digestHtml(r) {
+  const c = r.counts;
+  const title = r.week ? `Week ${esc(r.week)}` : "Last 7 days";
+  const nav = `<div class="graph-bar">
+      <a href="#/digest?week=${addDays(r.start, -7)}">← previous week</a>
+      <a href="#/digest">last 7 days</a>
+      <a href="#/digest?week=${esc(r.today)}">this week</a>
+      ${r.end < r.today ? `<a href="#/digest?week=${addDays(r.start, 7)}">next week →</a>` : ""}</div>`;
+  const sec = (head, n, body, empty) => `<section class="dg-sec"><h3>${head} <span class="muted">${n}</span></h3>${
+    n ? body : `<p class="empty dg-empty">${empty}</p>`}</section>`;
+  const where = (x) => `<span class="muted">${esc(x.page_title)} · ${esc(x.rel)}:${x.line}</span>`;
+  const answered = r.doubts.answered.map((d) => `<li><a href="${pageHref(d.rel, d.anchor)}">${esc(d.question)}</a>
+      <span class="muted">answered ${esc(d.answered_day)}</span>${d.answer ? `<div class="dg-ans">${inlineMd(d.answer)}</div>` : ""}</li>`).join("");
+  const asked = r.doubts.new.map((d) => `<li>${d.status === "open" ? "🔴" : "🟢"} <a href="${pageHref(d.rel, d.anchor)}">${esc(d.question)}</a>
+      ${where(d)}${d.asked ? ` <span class="muted">· asked ${esc(d.asked)}</span>` : ""}</li>`).join("");
+  const finds = r.findings.map((f) => `<li><span class="muted">${esc(f.date)}</span> ${inlineMd(f.text)}
+      <div><a href="${pageHref(f.rel)}">${esc(f.page_title)}</a>${f.section ? ` <span class="muted">› ${esc(f.section)}</span>` : ""}</div></li>`).join("");
+  const pages = r.pages.changed.map((p) => `<li><a href="${pageHref(p.rel)}">${esc(p.title)}</a>
+      ${p.new ? `<span class="badge b-both">new</span>` : ""} <span class="muted">${esc(p.rel)} · ${esc(p.day)}</span></li>`).join("")
+    + r.pages.removed.map((rel) => `<li class="muted"><s>${esc(rel)}</s> removed</li>`).join("");
+  const open = r.doubts.open.map((d) => `<li><a href="${pageHref(d.rel, d.anchor)}">${esc(d.question)}</a>
+      ${where(d)} <span class="age${d.age_days >= 14 ? " old" : ""}">${d.age_days == null ? "undated" : d.age_days + " d"}</span></li>`).join("");
+  const track = r.tracking.complete ? "" : `<p class="muted">Answers and new pages are tracked from ${esc(r.tracking.since || "the next re-index")}
+      (first index build); earlier changes only show through page dates.</p>`;
+  return `<h2>${title} <span class="muted">${esc(r.start)} – ${esc(r.end)}</span></h2>${nav}
+    <p class="dg-sum">${c.changed} pages changed (${c.new_pages} new${c.removed ? `, ${c.removed} removed` : ""}) ·
+      ${c.new_doubts} new doubts · ${c.answered} answered · ${c.findings} findings · <b>${c.open} still open</b></p>${track}
+    <div class="dg-grid">
+      ${sec("🟢 Answered", c.answered, `<ul>${answered}</ul>`, "No doubts answered in this window.")}
+      ${sec("❓ New doubts", c.new_doubts, `<ul>${asked}</ul>`, "No new doubts.")}
+      ${sec("🔍 Findings", c.findings, `<ul>${finds}</ul>`, "No dated findings in this window.")}
+      ${sec("📝 Pages changed", c.changed + c.removed, `<ul>${pages}</ul>`, "No pages changed.")}
+    </div>
+    ${sec("🔴 Still open", c.open, `<ul class="dg-open">${open}</ul>`, "No open doubts. 🎉")}`;
+}
+
+async function showDigest(week) {
+  document.title = "Digest — Desk Brain";
+  const r = await api(`/api/digest?week=${encodeURIComponent(week)}`);
+  main.innerHTML = digestHtml(r);
 }
 
 $("#search-form").addEventListener("submit", (e) => {

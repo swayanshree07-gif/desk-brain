@@ -140,7 +140,8 @@ def test_api_on_trap_desk_leaks_nothing(trap_desk, tmp_path):
             bodies.append(r.text)
         for rel in c.app.state.desk.index.page_rels():
             bodies.append(c.get("/api/page", params={"rel": rel}).text)
-        for path in ("/api/graph", "/api/cards", "/api/health", "/api/review?new=500"):
+        for path in ("/api/graph", "/api/cards", "/api/health", "/api/review?new=500", "/api/digest",
+                     "/api/digest?week=2026-W44", "/api/digest?week=2026-W45"):
             bodies.append(c.get(path).text)
         blob = "\n".join(bodies)
         for canary in CANARIES:
