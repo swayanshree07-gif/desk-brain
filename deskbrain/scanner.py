@@ -97,4 +97,5 @@ def read_page(root: Path, rel: str) -> str:
     # Double-check the real location too (belt and braces).
     if not is_allowed(p.relative_to(root).as_posix()):
         raise PermissionError(f"not allowed: {rel}")
-    return p.read_text(encoding="utf-8", errors="replace")
+    # utf-8-sig drops a leading BOM; bad bytes (latin-1, binary junk) become U+FFFD instead of failing.
+    return p.read_bytes().decode("utf-8-sig", errors="replace").replace("\x00", "\ufffd")

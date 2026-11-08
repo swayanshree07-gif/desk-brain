@@ -88,6 +88,7 @@ class UpdateStats:
     added: list[str] = field(default_factory=list)
     changed: list[str] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)  # unreadable this time (old row kept)
     links_resolved: int = 0
     seconds: float = 0.0
 
@@ -199,12 +200,17 @@ class Index:
                 since = str(now)
             since_ts = float(since)
             for f in files:
-                seen.add(f.rel)
                 old = known.get(f.rel)
+                seen.add(f.rel)
                 if old is not None and old["mtime"] == f.mtime and old["size"] == f.size:
                     st.unchanged += 1
                     continue
-                text = read_page(self.root, f.rel)
+                try:
+                    text = read_page(self.root, f.rel)
+                except OSError:
+                    # Unreadable (permissions) or vanished since the scan: keep any old row, try again next time.
+                    st.skipped.append(f.rel)
+                    continue
                 sha = _sha1(text)
                 if old is not None and old["sha1"] == sha:
                     self.db.execute("UPDATE pages SET mtime=?, size=? WHERE rel=?", (f.mtime, f.size, f.rel))
