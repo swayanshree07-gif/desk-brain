@@ -76,6 +76,7 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 .venv/bin/pytest -q                      # all tests (embedding tests skip until the model is downloaded)
 scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls endpoints, stops it
 .venv/bin/python scripts/check_pages.py  # renders every page; fails on unsafe hrefs / private paths
+.venv/bin/python scripts/perf.py         # index time, query latency per mode, disk use; exit 1 over limits
 .venv/bin/python scripts/ui_preview.py data/x.html /api/health /api/graph   # snapshot page for headless screenshots (--after JS to press keys)
 ```
 
@@ -99,13 +100,14 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 12 of 30 (ahead of plan, through planned Day 25): indexing, keyword/semantic/hybrid search,
+Day 13 of 30 (ahead of plan, through planned Day 26): indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
 endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
 and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
 spaced-repetition review (API, CLI and UI), the card lifecycle, and the weekly digest
 (change-event log, API, CLI and UI page), and index status with a
-stale-desk indicator; 253 tests.
+stale-desk indicator, and a performance report script
+(real desk, 58 pages: full index 0.07 s, full embed 11 s, hybrid query p95 2 ms, `data/` 89 MB); 254 tests.
 Note: "answered this week" and "new page" need change tracking, which starts at the first index
 build; earlier weeks show only what page dates and `Asked`/finding dates reveal.
 Next: performance numbers on the real desk (Day 26), then robustness (Day 27).
