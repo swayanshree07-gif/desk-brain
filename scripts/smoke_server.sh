@@ -32,6 +32,7 @@ check card-unknown  404 "$URL/api/review/card?id=nope"
 check digest        200 $URL/api/digest
 check digest-week   200 "$URL/api/digest?week=2026-W45"
 check digest-bad    422 "$URL/api/digest?week=bogus"
+check index-status 200 $URL/api/index/status
 check home          200 $URL/
 check graph.js      200 $URL/static/graph.js
 check app.js        200 $URL/static/app.js

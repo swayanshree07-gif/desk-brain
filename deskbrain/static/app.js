@@ -268,6 +268,7 @@ $("#reindex").addEventListener("click", async () => {
     const r = await api("/api/reindex", { method: "POST" });
     graphData = null;
     $("#status").textContent = `${r.added.length} added, ${r.changed.length} changed, ${r.removed.length} removed`;
+    $("#reindex").classList.remove("stale");
     route();
   } catch (e) { $("#status").textContent = "re-index failed: " + e.message; }
 });
@@ -278,6 +279,26 @@ document.addEventListener("keydown", (e) => {
   if ((e.key === " " || e.key === "Enter") && !session.shown) { e.preventDefault(); revealCard(); }
   else if (/^[0-5]$/.test(e.key) && session.shown) { e.preventDefault(); gradeCard(+e.key); }
 });
+// Index status: poll cheaply (stat-only on the server) and nudge when the desk changed.
+function ago(ts) {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  return s < 60 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+}
+function statusText(s) {
+  const when = s.last_update ? `indexed ${ago(s.last_update)}` : "not indexed";
+  const p = s.pending, n = p.added + p.changed + p.removed;
+  return s.stale ? `${when} · ${n} page${n === 1 ? "" : "s"} changed on desk` : `${when} · up to date`;
+}
+async function pollStatus() {
+  if (document.hidden || $("#status").textContent === "re-indexing…") return;
+  try {
+    const s = await api("/api/index/status");
+    $("#status").textContent = statusText(s);
+    $("#reindex").classList.toggle("stale", s.stale);
+  } catch (e) { /* server gone: leave the last text */ }
+}
+setInterval(pollStatus, 30000);
+document.addEventListener("visibilitychange", pollStatus);
 window.addEventListener("hashchange", route);
 $("#mode").value = localStorage.getItem("deskbrain.mode") || "hybrid";
-loadHealth().catch(() => {}).finally(route);
+loadHealth().catch(() => {}).finally(() => { route(); pollStatus(); });

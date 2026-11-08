@@ -60,6 +60,7 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `GET /api/page?rel=…` — rendered page (no raw HTML; links rewritten to in-app routes), headings, links, backlinks
 - `GET /api/digest?week=2026-W45` — weekly digest (`week` = ISO week or a date in it; empty = last 7 days): changed / new / removed pages,
   new doubts, doubts answered in the window, dated findings, every still-open doubt with its age; `tracking.since` = when change tracking began
+- `GET /api/index/status` — last re-index time, counts, pages changed on the desk since (stat-only; the UI polls it every 30 s and outlines the Re-index button when stale)
 - `POST /api/reindex` — incremental re-index
 
 ## UI
@@ -98,13 +99,14 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 11 of 30 (ahead of plan, through planned Day 24): indexing, keyword/semantic/hybrid search,
+Day 12 of 30 (ahead of plan, through planned Day 25): indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
 endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
 and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
 spaced-repetition review (API, CLI and UI), the card lifecycle, and the weekly digest
-(change-event log, API, CLI and UI page); 251 tests.
+(change-event log, API, CLI and UI page), and index status with a
+stale-desk indicator; 253 tests.
 Note: "answered this week" and "new page" need change tracking, which starts at the first index
 build; earlier weeks show only what page dates and `Asked`/finding dates reveal.
-Next: re-index status in the UI / file watcher (planned Day 25), then performance numbers on the real desk (Day 26).
+Next: performance numbers on the real desk (Day 26), then robustness (Day 27).
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

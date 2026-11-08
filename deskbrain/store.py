@@ -227,6 +227,16 @@ class Index:
         st.seconds = time.perf_counter() - t0
         return st
 
+    def pending(self) -> dict[str, list[str]]:
+        """Pages that look new/changed/removed since the last update, by (mtime, size) only.
+        Stat-only: no page is read, so this is cheap enough to poll."""
+        files = scan(self.root)
+        known = {r["rel"]: (r["mtime"], r["size"]) for r in self.db.execute("SELECT rel, mtime, size FROM pages")}
+        added = sorted(f.rel for f in files if f.rel not in known)
+        changed = sorted(f.rel for f in files if f.rel in known and known[f.rel] != (f.mtime, f.size))
+        removed = sorted(set(known) - {f.rel for f in files})
+        return {"added": added, "changed": changed, "removed": removed}
+
     def _doubt_states(self, rel: str) -> dict[str, str]:
         from .doubts import doubt_id
         return {doubt_id(rel, r["question"]): r["status"]

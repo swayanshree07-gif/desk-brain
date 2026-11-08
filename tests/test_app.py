@@ -153,3 +153,32 @@ def test_foreign_host_rejected(client):
 def test_no_docs_endpoints(client):
     for p in ("/docs", "/openapi.json", "/redoc"):
         assert client.get(p).status_code == 404
+
+
+def test_index_status_detects_change_then_reindex_clears(desk, tmp_path):
+    d = tmp_path / "desk"
+    shutil.copytree(desk, d)
+    app = create_app(d, tmp_path / "ix.sqlite", semantic=False)
+    with TestClient(app) as c:
+        s = c.get("/api/index/status").json()
+        assert s["stale"] is False and s["pending"] == {"added": 0, "changed": 0, "removed": 0}
+        assert s["last_update"] and s["counts"]["pages"] > 0
+        p = d / "02-cooking" / "bread.md"
+        p.write_text(p.read_text() + "\nmore\n")
+        (d / "02-cooking" / "new.md").write_text("# New\n")
+        (d / "Personal" / "secret-new.md").write_text("# hidden\n")  # private: never pending
+        s = c.get("/api/index/status").json()
+        assert s["stale"] and s["pending_pages"] == {"added": ["02-cooking/new.md"],
+                                                     "changed": ["02-cooking/bread.md"], "removed": []}
+        before = s["last_update"]
+        c.post("/api/reindex")
+        s = c.get("/api/index/status").json()
+        assert s["stale"] is False and s["last_update"] >= before
+        (d / "02-cooking" / "new.md").unlink()
+        assert c.get("/api/index/status").json()["pending"]["removed"] == 1
+    app.state.desk.close()
+
+
+def test_ui_has_status_poll(client):
+    js = client.get("/static/app.js").text
+    assert "/api/index/status" in js and "pollStatus" in js

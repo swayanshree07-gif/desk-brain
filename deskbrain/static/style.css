@@ -77,3 +77,4 @@ main.wide { max-width: none; }
 .dg-ans { font-size: .92rem; white-space: pre-line; }
 .age { font-size: .8rem; padding: 0 .4rem; border-radius: 8px; border: 1px solid var(--line); }
 .age.old { border-color: #d64545; color: #d64545; }
+#reindex.stale { outline: 2px solid #d97706; }

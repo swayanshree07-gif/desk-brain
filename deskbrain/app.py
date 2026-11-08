@@ -16,6 +16,7 @@ Endpoints
   GET  /api/review/card?id=     one card's state, grade log and lifecycle events
   GET  /api/digest?week=        weekly digest: changed pages, new/answered/open doubts,
                                 new findings; week = 2026-W45 or a date (default: last 7 days)
+  GET  /api/index/status        last re-index time, counts, pages changed since (stat-only)
   POST /api/reindex             incremental re-index of the desk
   GET  /                        the single-page frontend (static/index.html)
 
@@ -231,6 +232,19 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
             raise HTTPException(422, "week must look like 2026-W45 or 2026-11-03")
         with state.lock:
             return build_digest(state.index, start, end, today=today())
+
+    @app.get("/api/index/status")
+    def index_status():
+        """Cheap poll: is the index behind the desk? (stat-only, nothing is read)"""
+        with state.lock:
+            pend = state.index.pending()
+            last = state.index.meta("last_update")
+            counts = state.index.counts()
+            st = state.last_stats
+        n = sum(len(v) for v in pend.values())
+        return {"last_update": float(last) if last else None, "counts": counts, "stale": n > 0,
+                "pending": {k: len(v) for k, v in pend.items()}, "pending_pages": pend,
+                "last_summary": st.summary() if st else None}
 
     @app.post("/api/reindex")
     def reindex():
