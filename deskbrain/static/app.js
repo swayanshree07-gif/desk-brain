@@ -110,13 +110,31 @@ async function showPage(rel, anchor) {
         `<li><a href="${pageHref(b.rel)}">${esc(b.title)}</a> <span class="muted">${esc(b.rel)}</span></li>`).join("")}</ul></div>`
     : "";
   main.innerHTML = `<div class="page-meta">${esc(p.rel)} · modified ${esc(when)}</div>
-    <article class="page-body">${p.html}</article>${back}`;  // html is rendered server-side without raw HTML
+    <div class="page-layout"><div class="page-main"><article class="page-body">${p.html}</article>${back}</div>
+    <aside class="related" id="related" data-for="${esc(p.rel)}" hidden></aside></div>`;  // html is rendered server-side without raw HTML
+  loadRelated(rel);
   if (anchor) {
     const el = document.getElementById(anchor);
     if (el) { el.scrollIntoView(); el.classList.add("flash"); }
   } else {
     window.scrollTo(0, 0);
   }
+}
+
+// Day 18: related notes — sidebar on desktop, section below the page on phones (CSS decides).
+function relatedHtml(r) {
+  if (!r || !r.related || !r.related.length) return "";
+  return `<strong>Related notes</strong> <span class="muted">(${esc(r.method)})</span><ul>${r.related.map((it) =>
+    `<li><a href="${pageHref(it.rel)}">${esc(it.title)}</a>${it.linked ? ' <span class="badge" title="linked">link</span>' : ""}
+      <div class="muted crumb">${esc(it.rel)}</div></li>`).join("")}</ul>`;
+}
+async function loadRelated(rel) {
+  let r;
+  try { r = await api(`/api/related?rel=${encodeURIComponent(rel)}&k=6`); } catch (e) { return; }
+  const box = document.getElementById("related");
+  if (!box || box.dataset.for !== rel) return;   // user moved on to another page meanwhile
+  const html = relatedHtml(r);
+  if (html) { box.innerHTML = html; box.hidden = false; }
 }
 
 let graphData = null;   // cached until the next re-index

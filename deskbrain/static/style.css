@@ -40,6 +40,15 @@ select#mode { font: inherit; padding: 2px 4px; }
 header nav a { margin-right: .8rem; text-decoration: none; }
 header nav a.on { font-weight: 600; text-decoration: underline; }
 main.wide { max-width: none; }
+.page-layout { display: block; }
+.related { margin-top: 2rem; padding-top: .8rem; border-top: 1px solid var(--line); font-size: .92rem; }
+.related ul { list-style: none; padding: 0; margin: .4rem 0; }
+.related li { margin: .45rem 0; overflow-wrap: anywhere; }
+@media (min-width: 69em) {
+  main:has(.page-layout) { max-width: 72rem; }
+  .page-layout { display: grid; grid-template-columns: minmax(0, 1fr) 16rem; gap: 2rem; align-items: start; }
+  .related { position: sticky; top: 4rem; margin-top: 0; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 1rem; }
+}
 .graph-bar { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; margin-bottom: .5rem; font-size: .9rem; }
 .graph-bar select, .graph-bar input[type=search] { font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--fg); }
 .graph-wrap { position: relative; border: 1px solid var(--line); border-radius: 8px; }
@@ -109,7 +118,7 @@ html, body { overflow-x: hidden; }
   button { min-height: 40px; }
   /* Day 16: page, doubts, review, digest, graph at 375px */
   .page-body pre { font-size: .85rem; }
-  .backlinks a, .doubt a, .dg-sec a { display: inline-block; min-height: 40px; padding: .5rem 0; }
+  .backlinks a, .related a, .doubt a, .dg-sec a { display: inline-block; min-height: 40px; padding: .5rem 0; }
   .graph-bar { gap: .4rem; }
   .graph-bar select, .graph-bar input[type=search] { min-height: 40px; }
   .graph-wrap, .graph-legend { display: none; }
