@@ -169,6 +169,12 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
                 "html": render_page(text, rel, links), "headings": heads,
                 "links": public_links, "backlinks": back}
 
+    @app.get("/api/recent")
+    def recent(limit: int = Query(10, ge=1, le=50)):
+        """Latest-changed pages for the home / phone view."""
+        with state.lock:
+            return {"pages": state.index.recent(limit)}
+
     @app.get("/api/graph")
     def graph(folders: bool = True):
         with state.lock:

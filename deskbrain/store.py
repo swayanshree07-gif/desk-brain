@@ -318,6 +318,18 @@ class Index:
     def page_rels(self) -> list[str]:
         return [r[0] for r in self.db.execute("SELECT rel FROM pages ORDER BY rel")]
 
+    def recent(self, limit: int = 10) -> list[dict]:
+        """Most recently modified pages (newest first): rel, title, mtime, first_seen."""
+        from .scanner import is_allowed
+        rows = self.db.execute("SELECT rel, title, mtime, first_seen FROM pages ORDER BY mtime DESC, rel")
+        out = []
+        for r in rows:
+            if is_allowed(r["rel"]):
+                out.append(dict(r))
+                if len(out) >= limit:
+                    break
+        return out
+
     def page(self, rel: str) -> dict | None:
         """The stored page row (title, mtime, size, ...) or None if not indexed."""
         r = self.db.execute("SELECT * FROM pages WHERE rel=?", (rel,)).fetchone()

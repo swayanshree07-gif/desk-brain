@@ -33,6 +33,8 @@ check digest        200 $URL/api/digest
 check digest-week   200 "$URL/api/digest?week=2026-W45"
 check digest-bad    422 "$URL/api/digest?week=bogus"
 check index-status 200 $URL/api/index/status
+check recent        200 "$URL/api/recent?limit=5"
+check recent-bad    422 "$URL/api/recent?limit=0"
 check home          200 $URL/
 check graph.js      200 $URL/static/graph.js
 check app.js        200 $URL/static/app.js

@@ -65,13 +65,21 @@ async function loadHealth() {
 }
 
 async function showHome() {
-  const h = await loadHealth();
+  const [h, rec, od] = await Promise.all([loadHealth(), api("/api/recent?limit=8"), api("/api/doubts?status=open")]);
   const c = h.counts;
-  main.innerHTML = `<h2>Desk: ${esc(h.desk)}</h2>
-    <p>${c.pages} pages · ${c.chunks} sections · ${c.links} links (${c.bad_links} broken) ·
+  const recent = rec.pages.length ? `<ul class="home-list">${rec.pages.map((p) => `<li><a href="${pageHref(p.rel)}">${esc(p.title)}</a>
+      <span class="muted">${esc(p.rel)} · ${ago(p.mtime)}</span></li>`).join("")}</ul>` : `<p class="empty">No pages yet.</p>`;
+  const open = od.doubts.slice(0, 8);
+  const doubts = open.length ? `<ul class="home-list">${open.map((d) => `<li><a href="${pageHref(d.rel, d.anchor)}">${esc(d.question)}</a>
+      <span class="muted">${esc(d.page_title)}${d.asked ? " · asked " + esc(d.asked) : ""}</span></li>`).join("")}</ul>
+      ${od.doubts.length > open.length ? `<a href="#/doubts">All ${od.doubts.length} open doubts →</a>` : ""}` : `<p class="empty">No open doubts. 🎉</p>`;
+  main.innerHTML = `<p class="muted home-counts">${esc(h.desk)}: ${c.pages} pages · ${c.chunks} sections · ${c.links} links (${c.bad_links} broken) ·
        ${c.doubts} doubts (${c.open_doubts} open) · ${c.findings} findings</p>
-    <p class="muted">Type in the search box to find sections across the desk.
-      <b>hybrid</b> mixes word matches and meaning; <b>keyword</b> = exact words; <b>meaning</b> = similar ideas.
+    <div class="home-grid">
+      <section><h3>Recently changed</h3>${recent}</section>
+      <section><h3>🔴 Open doubts</h3>${doubts}</section>
+    </div>
+    <p class="muted">Search: <b>hybrid</b> mixes word matches and meaning; <b>keyword</b> = exact words; <b>meaning</b> = similar ideas.
       ${h.semantic ? "" : "(Meaning search is off: the embedding model is not downloaded — run <code>.venv/bin/python -m deskbrain embed</code> once.)"}</p>`;
   document.title = "Desk Brain";
 }
