@@ -98,7 +98,7 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 10 of 30 (ahead of plan, through planned Day 24): indexing, keyword/semantic/hybrid search,
+Day 11 of 30 (ahead of plan, through planned Day 24): indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
 endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
 and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
