@@ -6,6 +6,7 @@ Endpoints
                                 section search; mode = hybrid (default when the
                                 embedding model is available) | keyword | semantic
   GET  /api/page?rel=           one page: rendered HTML, headings, links, backlinks
+  GET  /api/related?rel=&k=    related pages (semantic or keyword similarity + link bonus)
   GET  /api/graph?folders=      page/folder nodes, link/folder edges, broken links
   GET  /api/doubts?status=&area=&q=
                                 doubts board: open/answered doubts with page + anchor
@@ -45,8 +46,9 @@ from .config import desk_path
 from .cards import list_cards
 from .digest import build_digest, window
 from .doubts import list_doubts
-from .graph import build_graph
+from .graph import EDGE_STATUSES, build_graph
 from .links import slugify
+from .related import related_pages
 from .render import render_page
 from .review import NEW_PER_DAY, ReviewStore, default_review_path, due_queue
 from .scanner import is_allowed, read_page
@@ -168,6 +170,24 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
         return {"rel": rel, "title": row["title"], "mtime": row["mtime"], "size": row["size"],
                 "html": render_page(text, rel, links), "headings": heads,
                 "links": public_links, "backlinks": back}
+
+    @app.get("/api/related")
+    def related(rel: str = Query(..., max_length=1000), k: int = Query(5, ge=1, le=20)):
+        """Pages most like ``rel``; never ``rel`` itself, never private pages."""
+        if not is_allowed(rel):
+            raise HTTPException(404, "not found")
+        with state.lock:
+            if state.index.page(rel) is None or state.bm25 is None:
+                raise HTTPException(404, "not found")
+            links = state.index.db.execute(
+                f"SELECT src, target FROM links WHERE status IN ({','.join('?' * len(EDGE_STATUSES))})",
+                EDGE_STATUSES).fetchall()
+            vs = state.searcher.vs if state.searcher.available else None
+            method, items = related_pages(rel, state.bm25, vs, links, k=k)
+            for it in items:
+                p = state.index.page(it["rel"])
+                it["title"] = p["title"] if p else it["rel"]
+        return {"rel": rel, "method": method, "related": items}
 
     @app.get("/api/recent")
     def recent(limit: int = Query(10, ge=1, le=50)):
