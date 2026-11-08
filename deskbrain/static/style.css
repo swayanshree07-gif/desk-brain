@@ -89,6 +89,11 @@ html, body { overflow-x: hidden; }
 .hit .crumb, .doubt .muted { overflow-wrap: anywhere; }
 .page-body img { max-width: 100%; height: auto; }
 .page-body table { display: block; max-width: 100%; overflow-x: auto; }
+.table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem; }
+.table-scroll table { display: table; }
+.page-body pre { max-width: 100%; }
+.page-body, .doubt, .fc, .dg-sec { overflow-wrap: anywhere; }
+.graph-list { display: none; }
 @media (max-width: 800px) { .home-grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {
   header { flex-wrap: wrap; gap: .4rem .6rem; padding: .5rem .7rem; }
@@ -102,4 +107,17 @@ html, body { overflow-x: hidden; }
   main { padding: .6rem .8rem 3rem; }
   .home-list li a { display: inline-block; padding: .2rem 0; }
   button { min-height: 40px; }
+  /* Day 16: page, doubts, review, digest, graph at 375px */
+  .page-body pre { font-size: .85rem; }
+  .backlinks a, .doubt a, .dg-sec a { display: inline-block; min-height: 40px; padding: .5rem 0; }
+  .graph-bar { gap: .4rem; }
+  .graph-bar select, .graph-bar input[type=search] { min-height: 40px; }
+  .graph-wrap, .graph-legend { display: none; }
+  .graph-list { display: block; }
+  .graph-list li a { display: inline-block; min-height: 40px; padding: .5rem 0; }
+  .fc { padding: 1rem .8rem; margin: .5rem 0; }
+  .fc-grades { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .fc-grades button { min-width: 0; min-height: 44px; }
+  .doubt { padding: .5rem .6rem; }
+  .dg-sec ul { padding-left: .9rem; }
 }

@@ -82,7 +82,15 @@
     return pos;
   }
 
-  const api = { layout, filterGraph, rng };
+  // Narrow-screen fallback: pages as a list, most-linked first (pure, tested under Node).
+  function listView(g, opts) {
+    const view = filterGraph(g, Object.assign({}, opts, { folders: false }));
+    return view.nodes.filter((n) => n.type !== "folder")
+      .sort((a, b) => (b.degree || 0) - (a.degree || 0) || String(a.title || a.id).localeCompare(String(b.title || b.id)))
+      .map((n) => ({ id: n.id, title: n.title || n.id, degree: n.degree || 0, orphan: !!n.orphan, area: n.area || "(root)" }));
+  }
+
+  const api = { layout, filterGraph, rng, listView };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.DeskGraph = api;
 
@@ -116,6 +124,9 @@
         `<span><i style="background:${color[a]}"></i>${esc(a)}</span>`).join("")}
         <span><i class="ring-orphan"></i>orphan (no links)</span><span><i class="ring-bad"></i>has bad links</span>
         <span>· size = links · drag to pan, wheel to zoom, click a page to open it</span></div>
+      <ul class="graph-list home-list">${listView(g, state).map((n) =>
+        `<li><a href="#/page/${n.id.split("/").map(encodeURIComponent).join("/")}">${esc(n.title)}</a>
+        <span class="muted">${esc(n.id)} · ${n.degree} links${n.orphan ? " · orphan" : ""}</span></li>`).join("")}</ul>
       <div id="g-broken"></div>`;
 
     const bad = g.broken.filter((b) => !state.area || (b.src.includes("/") ? b.src.split("/")[0] : "(root)") === state.area);

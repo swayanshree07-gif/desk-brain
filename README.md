@@ -102,7 +102,7 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 15 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
+Day 16 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
 endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
 and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
@@ -110,8 +110,8 @@ spaced-repetition review (API, CLI and UI), the card lifecycle, and the weekly d
 (change-event log, API, CLI and UI page), and index status with a
 stale-desk indicator, and a performance report script
 (real desk, 58 pages: full index 0.07 s, full embed 11 s, hybrid query p95 2 ms, `data/` 89 MB), and robustness hardening (BOM, non-UTF-8,
-NUL bytes, huge pages, unreadable files, fuzzed Markdown), plus a phone-friendly home view (recent notes + open doubts, `/api/recent`); 278 tests.
+NUL bytes, huge pages, unreadable files, fuzzed Markdown), plus a phone-friendly view at 375px (home with recent notes + open doubts via `/api/recent`; page tables/code scroll inside their box; larger tap targets on doubts, review and digest; the graph shows a most-linked-first page list on narrow screens); 283 tests.
 Note: "answered this week" and "new page" need change tracking, which starts at the first index
 build; earlier weeks show only what page dates and `Asked`/finding dates reveal.
-Next: phone view for the remaining pages (Day 16), related notes (17–18), Ask the desk (19–22), LAN mode (23–25); polish, docs and demo on Days 28–30.
+Next: related notes (17–18), Ask the desk (19–22), LAN mode (23–25); polish, docs and demo on Days 28–30.
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

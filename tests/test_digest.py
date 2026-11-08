@@ -125,9 +125,12 @@ def test_new_and_removed_pages(env):
     dg = build_digest(ix, *W45, today=TODAY)
     ch = {p["rel"]: p for p in dg["pages"]["changed"]}
     assert ch["03-music/theory.md"]["new"] is True and ch["03-music/theory.md"]["day"] == "2026-11-06"
-    assert dg["pages"]["removed"] == ["03-music/practice.md"]
+    # Removal / doubt_new events are stamped with the real clock, so look at a window
+    # that reaches today (a fixed W45 window broke once the calendar passed 2026-11-08).
+    ev = build_digest(ix, W45[0], max(date.today(), W45[1]), today=max(date.today(), TODAY))
+    assert ev["pages"]["removed"] == ["03-music/practice.md"]
     # Undated doubts on a new page count as new through the doubt_new event.
-    assert {"What is a mode?", "What is an octave?"} <= set(ids(dg["doubts"]["new"]))
+    assert {"What is a mode?", "What is an octave?"} <= set(ids(ev["doubts"]["new"]))
     assert "What is an octave?" in ids(dg["doubts"]["answered"])   # arrived already answered
     assert [f["text"] for f in dg["findings"]] == ["**Circle of fifths:** each step adds one sharp."]
     assert dg["counts"]["new_pages"] == 1 and dg["areas"]["03-music"] == 2

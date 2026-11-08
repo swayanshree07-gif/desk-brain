@@ -98,7 +98,9 @@ def render_page(text: str, rel: str, links: list[dict]) -> str:
                     child.type = "text"
                     child.content = f"[image: {child.content or src}]"
                     child.children = None
-    return _MD.renderer.render(tokens, _MD.options, {})
+    html = _MD.renderer.render(tokens, _MD.options, {})
+    # Wide tables scroll inside their own box on phones (raw HTML is escaped, so these tags are ours).
+    return html.replace("<table>", '<div class="table-scroll"><table>').replace("</table>", "</table></div>")
 
 
 def _rewrite_link(tok, rel: str, by_raw: dict[str, dict], wiki: list[dict]) -> None:
