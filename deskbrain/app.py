@@ -41,6 +41,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .ask import retrieve
 from .bm25 import BM25Index, snippet, tokenize
 from .config import desk_path
 from .cards import list_cards
@@ -188,6 +189,20 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
                 p = state.index.page(it["rel"])
                 it["title"] = p["title"] if p else it["rel"]
         return {"rel": rel, "method": method, "related": items}
+
+    @app.get("/api/ask")
+    def ask(q: str = Query("", max_length=500), mode: str = Query("", pattern="^(|hybrid|keyword|semantic)$")):
+        """Ask the desk (Day 19: retrieval + citations; answer text comes on Day 20)."""
+        t0 = time.perf_counter()
+        with state.lock:
+            out = retrieve(state.searcher, q, mode=mode)
+            for pg in out["pages"]:
+                row = state.index.page(pg["rel"])
+                pg["title"] = row["title"] if row else pg["rel"]
+        for c in out["citations"]:
+            c["slug"] = slugify(c["heading"]).strip("-") if c["heading"] else ""
+        out["ms"] = round((time.perf_counter() - t0) * 1000, 2)
+        return out
 
     @app.get("/api/recent")
     def recent(limit: int = Query(10, ge=1, le=50)):

@@ -37,6 +37,7 @@ check recent        200 "$URL/api/recent?limit=5"
 check recent-bad    422 "$URL/api/recent?limit=0"
 check related     200 "$URL/api/related?rel=README.md"
 check related-priv 404 "$URL/api/related?rel=Personal/x.md"
+check ask         200 "$URL/api/ask?q=doubts"
 check home          200 $URL/
 check graph.js      200 $URL/static/graph.js
 check app.js        200 $URL/static/app.js
