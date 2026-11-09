@@ -5,6 +5,7 @@
 //   #/graph?area=&folders=1&orphans=0   knowledge graph (graph.js)
 //   #/doubts?area=&q=  doubts board (open / answered columns)
 //   #/review           flashcard review: due + new cards, reveal, grade 0–5 (SM-2)
+//   #/ask?q=           ask the desk: extractive answer with [n] citations
 //   #/digest?week=     weekly digest (week = 2026-W45 or a date; none = last 7 days)
 "use strict";
 
@@ -37,6 +38,8 @@ async function route() {
       await showDoubts(params);
     } else if (path === "/review") {
       await showReview();
+    } else if (path === "/ask") {
+      await showAsk(params.get("q") || "", params.get("mode") || "");
     } else if (path === "/digest") {
       await showDigest(params.get("week") || "");
     } else if (path.startsWith("/page/")) {
@@ -119,6 +122,46 @@ async function showPage(rel, anchor) {
   } else {
     window.scrollTo(0, 0);
   }
+}
+
+// Day 21: Ask the desk. answerHtml/sourcesHtml are pure (tested under Node).
+function citeLink(c) {
+  return `<a class="cite" href="${pageHref(c.rel, c.slug)}" title="${esc(c.rel + (c.heading ? " › " + c.heading : ""))}">[${c.n}]</a>`;
+}
+
+function answerHtml(r) {
+  if (!r) return "";
+  const by = Object.fromEntries((r.citations || []).map((c) => [c.n, c]));
+  if (!r.known || !(r.answer || []).length) {
+    return `<div class="answer unknown"><p><strong>I don't know.</strong> The desk has nothing that clearly answers this.</p>
+      ${(r.citations || []).length ? `<p class="muted">Closest notes are listed under “Sources”.</p>` : ""}</div>`;
+  }
+  return `<div class="answer"><p>${r.answer.map((a) => `${esc(a.text)} ${by[a.n] ? citeLink(by[a.n]) : `[${esc(a.n)}]`}`).join(" ")}</p>
+    <p class="muted">Sentences quoted from your notes · ${esc(r.answer_method || r.mode || "")}</p></div>`;
+}
+
+function sourcesHtml(r, open) {
+  const cites = (r && r.citations) || [];
+  if (!cites.length) return "";
+  return `<details class="sources"${open ? " open" : ""}><summary>Sources (${cites.length})</summary><ol>${cites.map((c) => `
+    <li value="${c.n}">${citeLink(c)} <a href="${pageHref(c.rel, c.slug)}">${esc(c.heading || c.rel)}</a>
+      <span class="muted">${esc(c.rel)} · lines ${esc(c.line)}–${esc(c.end_line)}</span>
+      <pre class="src-text">${esc(c.text)}</pre></li>`).join("")}</ol></details>`;
+}
+
+async function showAsk(q, mode) {
+  document.title = q ? `Ask: ${q} — Desk Brain` : "Ask — Desk Brain";
+  const form = `<form id="ask-form" class="ask-form"><input id="ask-q" type="search" placeholder="Ask your desk a question…"
+      value="${esc(q)}" autocomplete="off" maxlength="500"><button type="submit">Ask</button></form>`;
+  main.innerHTML = form + `<div id="ask-out">${q.trim() ? `<p class="muted">Thinking…</p>` : `<p class="empty">Ask a question; answers quote your notes with numbered sources.</p>`}</div>`;
+  $("#ask-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    location.hash = "#/ask?q=" + encodeURIComponent($("#ask-q").value.trim());
+  });
+  if (!q.trim()) { $("#ask-q").focus(); return; }
+  const r = await api(`/api/ask?q=${encodeURIComponent(q)}${mode ? "&mode=" + encodeURIComponent(mode) : ""}`);
+  if (parseHash().params.get("q") !== q) return;   // user asked something else meanwhile
+  $("#ask-out").innerHTML = answerHtml(r) + sourcesHtml(r, !r.known) + `<p class="muted">${esc(r.mode)} · ${r.ms} ms</p>`;
 }
 
 // Day 18: related notes — sidebar on desktop, section below the page on phones (CSS decides).

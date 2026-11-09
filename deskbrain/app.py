@@ -29,6 +29,7 @@ A Host-header check blocks DNS-rebinding pages from reading the API.
 from __future__ import annotations
 
 import html
+import re
 import threading
 import time
 from pathlib import Path
@@ -55,6 +56,14 @@ from .review import NEW_PER_DAY, ReviewStore, default_review_path, due_queue
 from .scanner import is_allowed, read_page
 from .search import HybridSearcher, vectors_base
 from .store import Index, default_db_path
+
+# Markdown link targets that point into private areas (activity/, Personal/): blanked in
+# ask output, like the page view does, so not even private file names are shown.
+_PRIVATE_TARGET = re.compile(r"\]\((?:[^()\s]*/)?(?:activity|Personal)/[^()\s]*\)")
+
+
+def redact_private_targets(text: str) -> str:
+    return _PRIVATE_TARGET.sub("]()", text)
 
 STATIC_DIR = Path(__file__).parent / "static"
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
@@ -199,7 +208,10 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
             for pg in out["pages"]:
                 row = state.index.page(pg["rel"])
                 pg["title"] = row["title"] if row else pg["rel"]
+        for a in out["answer"]:
+            a["text"] = redact_private_targets(a["text"])
         for c in out["citations"]:
+            c["text"] = redact_private_targets(c["text"])
             c["slug"] = slugify(c["heading"]).strip("-") if c["heading"] else ""
         out["ms"] = round((time.perf_counter() - t0) * 1000, 2)
         return out

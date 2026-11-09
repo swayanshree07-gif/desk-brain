@@ -130,3 +130,14 @@ html, body { overflow-x: hidden; }
   .doubt { padding: .5rem .6rem; }
   .dg-sec ul { padding-left: .9rem; }
 }
+
+/* Day 21: Ask the desk */
+.ask-form { display: flex; gap: .5rem; margin: .5rem 0 1rem; }
+.ask-form input { flex: 1; min-width: 0; font-size: 1rem; padding: .5rem; min-height: 44px; box-sizing: border-box; }
+.ask-form button { min-height: 44px; padding: 0 1rem; }
+.answer { border-left: 4px solid #4a8; padding: .25rem .75rem; margin-bottom: 1rem; }
+.answer.unknown { border-left-color: #c84; }
+.cite { font-size: .85em; text-decoration: none; padding: 0 .15rem; }
+.sources li { margin-bottom: .75rem; }
+.sources summary { cursor: pointer; min-height: 44px; line-height: 44px; }
+.src-text { white-space: pre-wrap; word-break: break-word; font-size: .85em; max-height: 12rem; overflow: auto; background: #f6f6f4; padding: .5rem; }
