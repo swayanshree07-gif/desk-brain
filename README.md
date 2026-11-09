@@ -104,7 +104,7 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 22 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
+Day 23 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
 endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
 and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
@@ -112,8 +112,8 @@ spaced-repetition review (API, CLI and UI), the card lifecycle, and the weekly d
 (change-event log, API, CLI and UI page), and index status with a
 stale-desk indicator, and a performance report script
 (real desk, 58 pages: full index 0.07 s, full embed 11 s, hybrid query p95 2 ms, `data/` 89 MB), and robustness hardening (BOM, non-UTF-8,
-NUL bytes, huge pages, unreadable files, fuzzed Markdown), plus a phone-friendly view at 375px (home with recent notes + open doubts via `/api/recent`; page tables/code scroll inside their box; larger tap targets on doubts, review and digest; the graph shows a most-linked-first page list on narrow screens), and related notes (`/api/related`; shown in a sidebar on wide screens and below the page on phones), and Ask-the-desk retrieval with citations and an extractive cited answer (`/api/ask`) with an Ask page in the UI; 310 tests.
+NUL bytes, huge pages, unreadable files, fuzzed Markdown), plus a phone-friendly view at 375px (home with recent notes + open doubts via `/api/recent`; page tables/code scroll inside their box; larger tap targets on doubts, review and digest; the graph shows a most-linked-first page list on narrow screens), and related notes (`/api/related`; shown in a sidebar on wide screens and below the page on phones), and Ask-the-desk retrieval with citations and an extractive cited answer (`/api/ask`) with an Ask page in the UI, an optional loopback-only LLM phrasing step (`DESKBRAIN_LLM_URL`), and LAN mode part 1: `--lan [ADDR]` only accepts a private LAN address of this machine and creates `data/lan-token` (0600), but does not serve yet (it exits until token auth lands on Day 24); 365 tests.
 Note: "answered this week" and "new page" need change tracking, which starts at the first index
 build; earlier weeks show only what page dates and `Asked`/finding dates reveal.
-Next: LAN mode with token (23–25), hardening (26); polish, docs and demo on Days 28–30.
+Next: LAN token auth (24) and pairing page/`run.sh --lan` (25), hardening (26); polish, docs and demo on Days 28–30.
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

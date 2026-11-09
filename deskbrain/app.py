@@ -321,6 +321,20 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
     return app
 
 
+def lan_check(requested: str) -> None:
+    """Day 23: validate the LAN address and prepare the token, then stop.
+    Serving on the LAN stays disabled until token auth on every route exists (Day 24)."""
+    from .lan import LanError, choose_bind, load_or_create_token, token_path
+    try:
+        addr = choose_bind(None if requested == "auto" else requested)
+    except LanError as e:
+        raise SystemExit(f"--lan refused: {e}")
+    load_or_create_token()
+    raise SystemExit(f"--lan: would bind {addr}; token ready in {token_path()} (0600). "
+                     "LAN serving is not enabled yet (token auth lands on Day 24); "
+                     "nothing was started. Run without --lan for 127.0.0.1.")
+
+
 def main() -> None:
     import argparse
     import uvicorn
@@ -330,7 +344,11 @@ def main() -> None:
     ap.add_argument("--db", type=Path, default=None)
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--no-semantic", action="store_true", help="keyword search only (no embedding model)")
+    ap.add_argument("--lan", nargs="?", const="auto", default=None, metavar="ADDR",
+                    help="LAN mode (off by default): private LAN address only, token in data/lan-token")
     args = ap.parse_args()
+    if args.lan:
+        lan_check(args.lan)
     app = create_app(args.desk, args.db, semantic=False if args.no_semantic else None)
     # Always loopback only: the desk must never be reachable from the network.
     uvicorn.run(app, host=HOST, port=args.port, log_level="info")
