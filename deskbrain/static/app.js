@@ -136,8 +136,11 @@ function answerHtml(r) {
     return `<div class="answer unknown"><p><strong>I don't know.</strong> The desk has nothing that clearly answers this.</p>
       ${(r.citations || []).length ? `<p class="muted">Closest notes are listed under “Sources”.</p>` : ""}</div>`;
   }
-  return `<div class="answer"><p>${r.answer.map((a) => `${esc(a.text)} ${by[a.n] ? citeLink(by[a.n]) : `[${esc(a.n)}]`}`).join(" ")}</p>
-    <p class="muted">Sentences quoted from your notes · ${esc(r.answer_method || r.mode || "")}</p></div>`;
+  const cite = (n) => by[n] ? citeLink(by[n]) : `[${esc(n)}]`;
+  const llm = r.answer_method === "llm";
+  return `<div class="answer"><p>${r.answer.map((a) => `${esc(a.text)} ${(a.cites || [a.n]).map(cite).join("")}`).join(" ")}</p>
+    <p class="muted">${llm ? "Phrased by your local model from the cited notes only — check the sources" :
+      "Sentences quoted from your notes"} · ${esc(r.answer_method || r.mode || "")}</p></div>`;
 }
 
 function sourcesHtml(r, open) {

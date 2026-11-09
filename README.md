@@ -62,7 +62,7 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
   new doubts, doubts answered in the window, dated findings, every still-open doubt with its age; `tracking.since` = when change tracking began
 - `GET /api/index/status` — last re-index time, counts, pages changed on the desk since (stat-only; the UI polls it every 30 s and outlines the Re-index button when stale)
 - `GET /api/related?rel=&k=5` — pages most like this one (mean section embeddings, or TF-IDF without the model, plus a small bonus for direct/shared links); never the page itself or private pages
-- `GET /api/ask?q=&mode=` — Ask the desk top sections for a question, grouped per page (≤4 pages, ≤2 sections each), numbered citations `[1]..[n]` with path, heading, slug and line range, plus an extractive `answer`: up to 3 sentences copied verbatim from the cited sections, each tagged with its citation number; `known: false` ("don't know") when no sentence scores high enough. No LLM, works offline. Markdown link targets into `activity/`/`Personal/` are blanked in the returned text. UI: the **Ask** tab (`#/ask?q=`) shows the answer with clickable `[n]` citations that open the page at that heading, plus a collapsible “Sources” list (opened automatically on “I don't know”)
+- `GET /api/ask?q=&mode=` — Ask the desk top sections for a question, grouped per page (≤4 pages, ≤2 sections each), numbered citations `[1]..[n]` with path, heading, slug and line range, plus an extractive `answer`: up to 3 sentences copied verbatim from the cited sections, each tagged with its citation number; `known: false` ("don't know") when no sentence scores high enough. No LLM, works offline. Markdown link targets into `activity/`/`Personal/` are blanked in the returned text. UI: the **Ask** tab (`#/ask?q=`) shows the answer with clickable `[n]` citations that open the page at that heading, plus a collapsible “Sources” list (opened automatically on “I don't know”). Optional (Day 22): set `DESKBRAIN_LLM_URL=http://127.0.0.1:11434/v1` (any OpenAI-compatible server **on loopback only**; other hosts are refused at start) and optionally `DESKBRAIN_LLM_MODEL`, and confident answers are re-phrased by that model from the cited sections only; every sentence must carry a valid `[n]` or it is dropped, and on any failure the verbatim extractive answer is shown. Response field `llm` = `off`/`skipped`/`ok`/`rejected`/`dont-know`/`error: …`
 - `GET /api/recent?limit=10` — most recently changed pages (rel, title, mtime), newest first; private areas never listed
 - `POST /api/reindex` — incremental re-index
 
@@ -104,7 +104,7 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 21 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
+Day 22 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
 read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
 endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
 and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
@@ -115,5 +115,5 @@ stale-desk indicator, and a performance report script
 NUL bytes, huge pages, unreadable files, fuzzed Markdown), plus a phone-friendly view at 375px (home with recent notes + open doubts via `/api/recent`; page tables/code scroll inside their box; larger tap targets on doubts, review and digest; the graph shows a most-linked-first page list on narrow screens), and related notes (`/api/related`; shown in a sidebar on wide screens and below the page on phones), and Ask-the-desk retrieval with citations and an extractive cited answer (`/api/ask`) with an Ask page in the UI; 310 tests.
 Note: "answered this week" and "new page" need change tracking, which starts at the first index
 build; earlier weeks show only what page dates and `Asked`/finding dates reveal.
-Next: optional local LLM phrasing for Ask (22), LAN mode (23–25); polish, docs and demo on Days 28–30.
+Next: LAN mode with token (23–25), hardening (26); polish, docs and demo on Days 28–30.
 See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.

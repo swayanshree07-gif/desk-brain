@@ -43,6 +43,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .ask import answer, retrieve
+from .llm import config_from_env, phrase
 from .bm25 import BM25Index, snippet, tokenize
 from .config import desk_path
 from .cards import list_cards
@@ -112,9 +113,13 @@ class DeskState:
 
 
 def create_app(root: Path | str | None = None, db_path: Path | str | None = None,
-               semantic: bool | None = None, today: Callable[[], date] = date.today) -> FastAPI:
+               semantic: bool | None = None, today: Callable[[], date] = date.today,
+               llm: dict | None | str = "env") -> FastAPI:
     """``semantic``: None = use embeddings if the model is downloaded; False = keyword only.
-    ``today``: clock for the review queue (tests pass a fake one)."""
+    ``today``: clock for the review queue (tests pass a fake one).
+    ``llm``: "env" = read DESKBRAIN_LLM_URL (off when unset; non-loopback raises), None = off,
+    or a config dict (tests)."""
+    llm_cfg = config_from_env() if llm == "env" else llm
     state = DeskState(Path(root) if root else desk_path(), Path(db_path) if db_path else default_db_path(),
                       semantic=semantic)
     state.reindex()
@@ -130,7 +135,8 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
             st = state.last_stats
         return {"status": "ok", "desk": state.root.name, "counts": counts,
                 "last_update": st.summary() if st else None,
-                "semantic": state.searcher.available, "default_mode": state.searcher.default_mode()}
+                "semantic": state.searcher.available, "default_mode": state.searcher.default_mode(),
+                "llm": bool(llm_cfg)}
 
     @app.get("/api/search")
     def search(q: str = Query("", max_length=500), k: int = Query(20, ge=1, le=100), all: bool = False,
@@ -213,6 +219,7 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
         for c in out["citations"]:
             c["text"] = redact_private_targets(c["text"])
             c["slug"] = slugify(c["heading"]).strip("-") if c["heading"] else ""
+        phrase(llm_cfg, out)   # Day 22: optional loopback LLM, sees redacted text only
         out["ms"] = round((time.perf_counter() - t0) * 1000, 2)
         return out
 
