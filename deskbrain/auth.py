@@ -37,10 +37,11 @@ def _eq(a: str, b: str) -> bool:
 
 
 class TokenAuthMiddleware:
-    def __init__(self, app, token: str):
+    def __init__(self, app, token: str, fail_limiter=None):
         if not token or len(token) < 20:
             raise ValueError("LAN token too short")
         self.app = app
+        self.fails = fail_limiter   # Day 26: RateLimiter of failed attempts per client IP
         self.token = token
         self.cookie = cookie_value(token)
 
@@ -50,6 +51,11 @@ class TokenAuthMiddleware:
         server = scope.get("server") or (None, None)
         if _is_loopback(server[0]):
             return await self.app(scope, receive, send)
+
+        client = str((scope.get("client") or ("?",))[0])
+        if self.fails is not None and self.fails.blocked(client):
+            return await self._deny(scope, send, 429, b"429 too many failed token attempts; wait a minute\n",
+                                    [(b"retry-after", str(self.fails.retry_after(client)).encode())])
 
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
         auth = headers.get("authorization", "")
@@ -80,13 +86,20 @@ class TokenAuthMiddleware:
             await send({"type": "http.response.body", "body": b""})
             return
 
+        # Only count real guesses (a wrong token/cookie was presented), not plain visits.
+        if self.fails is not None and (auth or "x-desk-token" in headers or given
+                                       or COOKIE in headers.get("cookie", "")):
+            self.fails.hit(client)
+        await self._deny(scope, send, 401, b"401 unauthorized: LAN mode needs the token\n",
+                         [(b"www-authenticate", b"Bearer")])
+
+    @staticmethod
+    async def _deny(scope, send, status: int, body: bytes, extra: list) -> None:
         if scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})
             return
-        body = b"401 unauthorized: LAN mode needs the token\n"
-        await send({"type": "http.response.start", "status": 401, "headers": [
+        await send({"type": "http.response.start", "status": status, "headers": [
             (b"content-type", b"text/plain; charset=utf-8"),
-            (b"www-authenticate", b"Bearer"),
             (b"cache-control", b"no-store"),
-            (b"content-length", str(len(body)).encode())]})
+            (b"content-length", str(len(body)).encode())] + extra})
         await send({"type": "http.response.body", "body": body})

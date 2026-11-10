@@ -43,6 +43,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .ask import answer, retrieve
+from .harden import RateLimiter, SecurityHeadersMiddleware
 from .llm import config_from_env, phrase
 from .bm25 import BM25Index, snippet, tokenize
 from .config import desk_path
@@ -114,7 +115,9 @@ class DeskState:
 
 def create_app(root: Path | str | None = None, db_path: Path | str | None = None,
                semantic: bool | None = None, today: Callable[[], date] = date.today,
-               llm: dict | None | str = "env", lan: dict | None = None) -> FastAPI:
+               llm: dict | None | str = "env", lan: dict | None = None,
+               ask_rate: tuple[int, float] = (30, 60.0),
+               auth_fail_rate: tuple[int, float] = (10, 60.0)) -> FastAPI:
     """``semantic``: None = use embeddings if the model is downloaded; False = keyword only.
     ``today``: clock for the review queue (tests pass a fake one).
     ``llm``: "env" = read DESKBRAIN_LLM_URL (off when unset; non-loopback raises), None = off,
@@ -135,10 +138,13 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
             raise ValueError(f"not a private LAN address: {lan['addr']}")
         if len(lan.get("token") or "") < 20:
             raise ValueError("LAN token too short")
-        app.add_middleware(TokenAuthMiddleware, token=lan["token"])  # inner
+        app.add_middleware(TokenAuthMiddleware, token=lan["token"],  # inner
+                           fail_limiter=RateLimiter(*auth_fail_rate))
         a = lan["addr"]
         hosts.append(f"[{a}]" if ":" in a else a)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)  # outer: bad Host rejected first
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)  # bad Host rejected first
+    app.add_middleware(SecurityHeadersMiddleware)  # outermost: headers on every response, even 400/401
+    ask_limit = RateLimiter(*ask_rate)
     app.state.desk = state
 
     @app.get("/api/health")
@@ -219,8 +225,13 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
         return {"rel": rel, "method": method, "related": items}
 
     @app.get("/api/ask")
-    def ask(q: str = Query("", max_length=500), mode: str = Query("", pattern="^(|hybrid|keyword|semantic)$")):
+    def ask(request: Request, q: str = Query("", max_length=500),
+            mode: str = Query("", pattern="^(|hybrid|keyword|semantic)$")):
         """Ask the desk (retrieval + citations, Day 19; extractive answer, Day 20)."""
+        who = request.client.host if request.client else "?"
+        if q.strip() and not ask_limit.hit(who):   # Day 26: protects CPU / local LLM
+            raise HTTPException(429, "too many questions; wait a little",
+                                headers={"Retry-After": str(ask_limit.retry_after(who))})
         t0 = time.perf_counter()
         with state.lock:
             out = answer(state.searcher, retrieve(state.searcher, q, mode=mode))

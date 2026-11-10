@@ -18,7 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from deskbrain.ask import answer, retrieve  # noqa: E402
 from deskbrain.bm25 import BM25Index  # noqa: E402
+from deskbrain.graph import EDGE_STATUSES  # noqa: E402
+from deskbrain.related import related_pages  # noqa: E402
 from deskbrain.config import DATA_DIR, desk_path  # noqa: E402
 from deskbrain.embed import model_cached  # noqa: E402
 from deskbrain.search import HybridSearcher, vectors_base  # noqa: E402
@@ -39,6 +42,12 @@ def du_mb(p: Path) -> float:
     return total / 2**20
 
 
+def _stats(ms: list[float]) -> dict:
+    ms = sorted(ms) or [0.0]
+    return {"median_ms": round(statistics.median(ms), 1),
+            "p95_ms": round(ms[min(len(ms) - 1, int(0.95 * len(ms)))], 1)}
+
+
 def run(root: Path, semantic: bool | None = None) -> dict:
     out: dict = {"desk_pages": 0}
     with tempfile.TemporaryDirectory(prefix="deskbrain-perf-") as td:
@@ -53,6 +62,10 @@ def run(root: Path, semantic: bool | None = None) -> dict:
             out["noop_changed"] = st.n_changed
             out.update(ix.counts())
             chunks = ix.chunks()
+            links = ix.db.execute(
+                f"SELECT src, target FROM links WHERE status IN ({','.join('?' * len(EDGE_STATUSES))})",
+                EDGE_STATUSES).fetchall()
+            rels = [r[0] for r in ix.db.execute("SELECT rel FROM pages ORDER BY rel").fetchall()]
         bm = BM25Index(chunks)
         hs = HybridSearcher(vectors_base(db), semantic=semantic)
         t = time.perf_counter()
@@ -73,6 +86,22 @@ def run(root: Path, semantic: bool | None = None) -> dict:
             lat[m] = {"median_ms": round(statistics.median(ms), 1),
                       "p95_ms": round(ms[min(len(ms) - 1, int(0.95 * len(ms)))], 1)}
         out["query"] = lat
+        # Day 26: Ask (retrieve + extractive answer, no LLM) and related-notes latency
+        ms = []
+        for q in QUERIES:
+            hs._qcache.clear()
+            t = time.perf_counter()
+            answer(hs, retrieve(hs, q))
+            ms.append((time.perf_counter() - t) * 1000)
+        out["ask"] = _stats(ms)
+        vs = hs.vs if hs.available else None
+        step = max(1, len(rels) // 40)
+        ms = []
+        for rel in rels[::step][:40]:
+            t = time.perf_counter()
+            related_pages(rel, bm, vs, links, k=5)
+            ms.append((time.perf_counter() - t) * 1000)
+        out["related"] = _stats(ms)
         out["temp_index_mb"] = round(du_mb(Path(td)), 2)
     out["data_dir_mb"] = round(du_mb(DATA_DIR), 1) if DATA_DIR.exists() else 0.0
     out["semantic"] = hs.available
@@ -81,7 +110,7 @@ def run(root: Path, semantic: bool | None = None) -> dict:
         problems.append(f"data/ is {out['data_dir_mb']} MB > {LIMITS['disk_mb']} MB")
     if out["noop_reindex_s"] > LIMITS["noop_reindex_s"]:
         problems.append(f"no-op re-index {out['noop_reindex_s']} s")
-    for m, v in lat.items():
+    for m, v in list(lat.items()) + [("ask", out["ask"]), ("related", out["related"])]:
         if v["p95_ms"] > LIMITS["query_p95_ms"]:
             problems.append(f"{m} p95 {v['p95_ms']} ms")
     out["problems"] = problems
@@ -102,6 +131,9 @@ def main(argv: list[str]) -> int:
         print(f"no-op re-index  {r['noop_reindex_s']:.3f} s ({r['noop_changed']} changed)")
         for m, v in r["query"].items():
             print(f"query {m:<9} median {v['median_ms']:.1f} ms  p95 {v['p95_ms']:.1f} ms")
+        for name in ("ask", "related"):
+            v = r[name]
+            print(f"{name:<15} median {v['median_ms']:.1f} ms  p95 {v['p95_ms']:.1f} ms")
         print(f"index files     {r['temp_index_mb']} MB   data/ total {r['data_dir_mb']} MB (limit {LIMITS['disk_mb']} MB)")
         print("OK" if not r["problems"] else "PROBLEMS: " + "; ".join(r["problems"]))
     return 1 if r["problems"] else 0
