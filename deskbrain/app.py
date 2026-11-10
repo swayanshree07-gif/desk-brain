@@ -114,18 +114,31 @@ class DeskState:
 
 def create_app(root: Path | str | None = None, db_path: Path | str | None = None,
                semantic: bool | None = None, today: Callable[[], date] = date.today,
-               llm: dict | None | str = "env") -> FastAPI:
+               llm: dict | None | str = "env", lan: dict | None = None) -> FastAPI:
     """``semantic``: None = use embeddings if the model is downloaded; False = keyword only.
     ``today``: clock for the review queue (tests pass a fake one).
     ``llm``: "env" = read DESKBRAIN_LLM_URL (off when unset; non-loopback raises), None = off,
-    or a config dict (tests)."""
+    or a config dict (tests).
+    ``lan``: None (default) = loopback only, no token; or {"addr": private IP, "token": str}
+    = also accept that Host and require the token on every non-loopback request."""
     llm_cfg = config_from_env() if llm == "env" else llm
     state = DeskState(Path(root) if root else desk_path(), Path(db_path) if db_path else default_db_path(),
                       semantic=semantic)
     state.reindex()
 
     app = FastAPI(title="Desk Brain", docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+    hosts = list(ALLOWED_HOSTS)
+    if lan:
+        from .auth import TokenAuthMiddleware
+        from .lan import is_lan_address
+        if not is_lan_address(lan["addr"]):
+            raise ValueError(f"not a private LAN address: {lan['addr']}")
+        if len(lan.get("token") or "") < 20:
+            raise ValueError("LAN token too short")
+        app.add_middleware(TokenAuthMiddleware, token=lan["token"])  # inner
+        a = lan["addr"]
+        hosts.append(f"[{a}]" if ":" in a else a)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)  # outer: bad Host rejected first
     app.state.desk = state
 
     @app.get("/api/health")
@@ -321,18 +334,25 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
     return app
 
 
-def lan_check(requested: str) -> None:
-    """Day 23: validate the LAN address and prepare the token, then stop.
-    Serving on the LAN stays disabled until token auth on every route exists (Day 24)."""
-    from .lan import LanError, choose_bind, load_or_create_token, token_path
+def lan_setup(requested: str) -> dict:
+    """Validate the LAN address (private, this machine's own) and load/create the 0600 token."""
+    from .lan import LanError, choose_bind, load_or_create_token
     try:
         addr = choose_bind(None if requested == "auto" else requested)
     except LanError as e:
         raise SystemExit(f"--lan refused: {e}")
-    load_or_create_token()
-    raise SystemExit(f"--lan: would bind {addr}; token ready in {token_path()} (0600). "
-                     "LAN serving is not enabled yet (token auth lands on Day 24); "
-                     "nothing was started. Run without --lan for 127.0.0.1.")
+    return {"addr": addr, "token": load_or_create_token()}
+
+
+def _bind(host: str, port: int):
+    import socket
+    fam = socket.AF_INET6 if ":" in host else socket.AF_INET
+    s = socket.socket(fam, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host, port))
+    s.listen(128)
+    s.set_inheritable(True)
+    return s
 
 
 def main() -> None:
@@ -347,11 +367,19 @@ def main() -> None:
     ap.add_argument("--lan", nargs="?", const="auto", default=None, metavar="ADDR",
                     help="LAN mode (off by default): private LAN address only, token in data/lan-token")
     args = ap.parse_args()
-    if args.lan:
-        lan_check(args.lan)
-    app = create_app(args.desk, args.db, semantic=False if args.no_semantic else None)
-    # Always loopback only: the desk must never be reachable from the network.
-    uvicorn.run(app, host=HOST, port=args.port, log_level="info")
+    lan = lan_setup(args.lan) if args.lan else None
+    app = create_app(args.desk, args.db, semantic=False if args.no_semantic else None, lan=lan)
+    if not lan:
+        # Default: loopback only; the desk is not reachable from the network.
+        uvicorn.run(app, host=HOST, port=args.port, log_level="info")
+        return
+    # LAN mode: one loopback socket (no token) + one socket on the private LAN address (token).
+    socks = [_bind(HOST, args.port), _bind(lan["addr"], args.port)]
+    a = lan["addr"]
+    print(f"LAN mode: http://{'[%s]' % a if ':' in a else a}:{args.port}/  (token in data/lan-token; "
+          f"open once with ?token=... on the phone). Loopback: http://{HOST}:{args.port}/", flush=True)
+    server = uvicorn.Server(uvicorn.Config(app, log_level="info"))
+    server.run(sockets=socks)
 
 
 if __name__ == "__main__":
