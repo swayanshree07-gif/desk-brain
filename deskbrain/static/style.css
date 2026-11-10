@@ -141,3 +141,8 @@ html, body { overflow-x: hidden; }
 .sources li { margin-bottom: .75rem; }
 .sources summary { cursor: pointer; min-height: 44px; line-height: 44px; }
 .src-text { white-space: pre-wrap; word-break: break-word; font-size: .85em; max-height: 12rem; overflow: auto; background: #f6f6f4; padding: .5rem; }
+.keys-help { position: fixed; z-index: 50; top: 4rem; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 2rem);
+  background: var(--bg, #fff); border: 1px solid var(--muted); border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 6px 24px rgba(0,0,0,.2); }
+.keys-help dl { display: grid; grid-template-columns: auto 1fr; gap: .3rem 1rem; margin: 0; }
+.keys-help dd { margin: 0; }
+kbd { font-family: ui-monospace, monospace; border: 1px solid var(--muted); border-radius: 4px; padding: 0 .3rem; }

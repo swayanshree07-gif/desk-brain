@@ -71,7 +71,7 @@ async function showHome() {
   const [h, rec, od] = await Promise.all([loadHealth(), api("/api/recent?limit=8"), api("/api/doubts?status=open")]);
   const c = h.counts;
   const recent = rec.pages.length ? `<ul class="home-list">${rec.pages.map((p) => `<li><a href="${pageHref(p.rel)}">${esc(p.title)}</a>
-      <span class="muted">${esc(p.rel)} · ${ago(p.mtime)}</span></li>`).join("")}</ul>` : `<p class="empty">No pages yet.</p>`;
+      <span class="muted">${esc(p.rel)} · ${ago(p.mtime)}</span></li>`).join("")}</ul>` : `<p class="empty">No pages indexed yet. Press <b>Re-index</b> to scan the desk.</p>`;
   const open = od.doubts.slice(0, 8);
   const doubts = open.length ? `<ul class="home-list">${open.map((d) => `<li><a href="${pageHref(d.rel, d.anchor)}">${esc(d.question)}</a>
       <span class="muted">${esc(d.page_title)}${d.asked ? " · asked " + esc(d.asked) : ""}</span></li>`).join("")}</ul>
@@ -344,12 +344,31 @@ $("#reindex").addEventListener("click", async () => {
     route();
   } catch (e) { $("#status").textContent = "re-index failed: " + e.message; }
 });
+function toggleHelp(show) {
+  let box = $("#keys-help");
+  if (show === false) { if (box) box.hidden = true; return; }
+  if (!box) {
+    box = document.createElement("div"); box.id = "keys-help"; box.className = "keys-help"; box.hidden = true;
+    box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Keyboard shortcuts");
+    box.innerHTML = `<h3>Keyboard shortcuts</h3><dl>${KEYS_HELP.map(([k, v]) => `<dt><kbd>${esc(k)}</kbd></dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+    box.addEventListener("click", () => { box.hidden = true; });
+    document.body.appendChild(box);
+  }
+  box.hidden = !box.hidden;
+}
 document.addEventListener("keydown", (e) => {
-  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
-  if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); return; }
-  if (typing || e.ctrlKey || e.metaKey || e.altKey || parseHash().path !== "/review" || !session) return;
-  if ((e.key === " " || e.key === "Enter") && !session.shown) { e.preventDefault(); revealCard(); }
-  else if (/^[0-5]$/.test(e.key) && session.shown) { e.preventDefault(); gradeCard(+e.key); }
+  const el = document.activeElement;
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable;
+  const a = keyAction({ key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, typing,
+    path: parseHash().path, reviewing: !!session, shown: !!(session && session.shown) });
+  if (!a) return;
+  e.preventDefault();
+  if (a.blur) el.blur();
+  else if (a.focus) $(a.focus).focus();
+  else if ("help" in a) toggleHelp(a.help === "toggle" ? undefined : false);
+  else if (a.go) { toggleHelp(false); location.hash = a.go; }
+  else if (a.review === "reveal") revealCard();
+  else if (typeof a.review === "number") gradeCard(a.review);
 });
 // Index status: poll cheaply (stat-only on the server) and nudge when the desk changed.
 function ago(ts) {
