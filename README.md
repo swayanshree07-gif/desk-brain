@@ -1,17 +1,52 @@
 # Desk Brain
 
-A local web app (in progress, 30-day project) that runs on top of the Markdown knowledge base
-in `~/Personal-Desk`. Working now: keyword + semantic (meaning) + hybrid search, a read-only
-page view, a knowledge-graph view of pages and links, and a doubts board (`### 🔴 Q:` open /
-`### 🟢 Q:` answered), and flashcards built automatically from answered doubts and dated
-findings, reviewed with SM-2 spaced repetition in the browser (edited cards keep their
-schedule, deleted ones are retired), and a weekly digest (what changed, what was answered,
-what is still open). It serves on `127.0.0.1:8765` only, started with `./run.sh`.
+A local web app that runs on your laptop on top of the Markdown knowledge base in
+`~/Personal-Desk`. It offers keyword + semantic (meaning) + hybrid search, a read-only page view
+with related notes, "Ask the desk" answers that cite the notes they came from, a knowledge-graph
+view, a doubts board (`### 🔴 Q:` open / `### 🟢 Q:` answered), flashcards built automatically
+from answered doubts and dated findings with SM-2 spaced repetition, and a weekly digest. It works
+on a phone screen (375px) and has an optional token-protected LAN mode. One command starts it:
+`./run.sh`, serving on `127.0.0.1:8765` only.
 
-**Privacy rules:** the desk is read-only to this app. `activity/`, `Personal/`, `tools/`,
-`_templates/` (and any `_template/` folder or hidden folder) are never indexed or shown; these
-names are matched case-insensitively, and symlinks are never followed or read.
-Index data lives in `data/` (git-ignored); tests use the made-up desk in `tests/fixtures/desk/`.
+## Install
+Needs Linux/macOS with Python 3.11+ and network access for the first install. Nothing else
+(no PyTorch, no Node; Node is only used by some optional JS tests).
+```bash
+git clone <this repo> desk-brain && cd desk-brain
+./run.sh            # first run: creates .venv (~255 MB), installs deps, indexes the desk, serves
+```
+The embedding model (~90 MB, ONNX MiniLM) is downloaded into `data/models/` the first time you run
+`.venv/bin/python -m deskbrain embed`; until then search is keyword-only. Total disk use stays
+under ~400 MB (`.venv` + `data/`).
+
+## Privacy rules
+- **The desk is read-only.** The app only opens files for reading; it never writes, moves or
+  deletes anything in `~/Personal-Desk`, and never runs git there.
+- **Never indexed or shown:** `activity/`, `Personal/`, `tools/`, `_templates/`, any `_template/`
+  folder and hidden folders (matched case-insensitively). Symlinks are never followed. Links that
+  point into those areas are shown as "private" and never resolved; Ask answers blank them.
+- **Nothing from the desk goes into git.** Index, embeddings and flashcard state live in `data/`
+  (git-ignored). Tests use the made-up desk in `tests/fixtures/desk/`.
+- **Local only.** By default it listens on 127.0.0.1 and rejects foreign `Host` headers.
+  `--lan` (off by default) adds this machine's *private* LAN address only, with a token on every
+  route; the optional LLM step accepts loopback URLs only. No data leaves the machine.
+
+## Architecture
+```
+~/Personal-Desk (read-only)
+   │ scanner.py  walk, skip private dirs/symlinks        parser.py  titles, links, doubts, findings
+   ▼
+ chunker.py  heading sections ──► store.py  data/index.sqlite (incremental, change-event log)
+                                    ├─ bm25.py   keyword ranking      ┐
+                                    ├─ embed.py  MiniLM vectors (npy) ┴► search.py hybrid (RRF)
+                                    ├─ graph.py / doubts.py / digest.py / related.py
+                                    ├─ cards.py ──► review.py  data/flashcards.sqlite (SM-2)
+                                    └─ ask.py (+ optional llm.py) cited answers
+ app.py  FastAPI: /api/* JSON + static/ (plain HTML/JS/CSS, no build step)
+         harden.py headers + rate limits · lan.py/auth.py optional LAN token mode
+```
+Re-indexing is incremental: pages are re-read only when mtime/size change, and sections are
+re-embedded only when their content hash changes.
 
 ## Run
 ```bash
@@ -77,6 +112,7 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 
 ## Checks
 ```bash
+scripts/check.sh                         # everything below in one go on the fixture desk (~30 s); --real for ~/Personal-Desk
 .venv/bin/pytest -q                      # all tests (embedding tests skip until the model is downloaded)
 scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls endpoints, stops it
 .venv/bin/python scripts/check_pages.py  # renders every page; fails on unsafe hrefs / private paths
@@ -104,16 +140,14 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 28 of 30. The original plan was finished early, so Days 15–27 were re-planned (see `PLAN.md`) around a phone view, related notes, 'Ask the desk' with citations and an optional token-protected LAN mode. Built so far: indexing, keyword/semantic/hybrid search,
-read-only page view (`./run.sh`), safety layer (path/symlink guards, privacy tests over every
-endpoint and the raw `data/` files), incremental embeddings, the graph view (area filter, orphan
-and bad-link highlighting), the doubts board (API + UI), flashcard generation, SM-2
-spaced-repetition review (API, CLI and UI), the card lifecycle, and the weekly digest
-(change-event log, API, CLI and UI page), and index status with a
-stale-desk indicator, and a performance report script
-(real desk, 58 pages: full index 0.07 s, full embed 11 s, hybrid query p95 2 ms, `data/` 89 MB), and robustness hardening (BOM, non-UTF-8,
-NUL bytes, huge pages, unreadable files, fuzzed Markdown), plus a phone-friendly view at 375px (home with recent notes + open doubts via `/api/recent`; page tables/code scroll inside their box; larger tap targets on doubts, review and digest; the graph shows a most-linked-first page list on narrow screens), and related notes (`/api/related`; shown in a sidebar on wide screens and below the page on phones), and Ask-the-desk retrieval with citations and an extractive cited answer (`/api/ask`) with an Ask page in the UI, an optional loopback-only LLM phrasing step (`DESKBRAIN_LLM_URL`), and LAN mode part 1: `--lan [ADDR]` only accepts a private LAN address of this machine and creates `data/lan-token` (0600), and LAN mode part 2: `./run.sh --lan [ADDR]` serves on 127.0.0.1 (no token) **and** that private address, where every route needs the token (`Authorization: Bearer`, `X-Desk-Token`, or open `http://LAN-IP:8765/?token=…` once on the phone → HttpOnly SameSite=Strict cookie, token removed from the URL by a redirect); wrong Host → 400; and a pairing page `http://127.0.0.1:PORT/pair` (LAN mode only, shown only on the loopback socket, 404 elsewhere) with the phone link including the token; `scripts/smoke_lan.sh` checks it all end to end; Day 26 hardening: security headers on every response (strict same-origin CSP, nosniff, frame-deny, no-referrer, `no-store` on `/api/`), `/api/ask` limited to 30 questions/minute per client (429 + `Retry-After`), and in LAN mode a client IP with 10 wrong tokens in a minute is locked out for that minute (loopback never); `scripts/perf.py` now also reports Ask and related-notes latency; Day 27: keyboard shortcuts (`/` search, `?` help overlay, `h a g d r w` to switch pages, Space/Enter and 0–5 in review, Esc to leave a text box) and a clearer empty home page; Day 28: styling polish (dark-safe source boxes, visible keyboard focus, softer empty-state boxes), first-run empty states for the graph and review pages, help overlay scrolls and fits at 375px; 412 tests.
-Note: "answered this week" and "new page" need change tracking, which starts at the first index
-build; earlier weeks show only what page dates and `Asked`/finding dates reveal.
-Next: docs (Day 29) and the final demo (Day 30).
-See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.
+Day 29 of 30 — feature-complete. The original plan was finished early, so Days 15–27 were
+re-planned (see `PLAN.md`) around a phone view, related notes, cited "Ask the desk" answers and the
+optional LAN mode; Days 26–28 hardened and polished it (security headers, rate limits, keyboard
+shortcuts `/ ? h a g d r w`, empty states, dark-safe styling). 415 tests pass; `scripts/check.sh`
+runs tests + render check + server and LAN smoke tests; a fresh clone + `./run.sh` was verified on Day 29.
+Real desk (68 pages): full index < 0.1 s, full embed ~11 s, hybrid p95 2 ms, Ask p95 ~200 ms, `data/` ~90 MB.
+
+Known limits: the UI has not been viewed in a real browser in this environment (JS logic is
+Node-tested, CSS checked statically). "Answered this week" and "new page" in the digest need change
+tracking, which starts at the first index build.
+Next: final demo script (Day 30). See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.
