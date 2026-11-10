@@ -37,8 +37,8 @@ from pathlib import Path
 from datetime import date
 from typing import Callable
 
-from fastapi import Body, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -325,6 +325,26 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
         return {"added": st.added, "changed": st.changed, "removed": st.removed,
                 "summary": st.summary()}
 
+    @app.get("/pair")
+    def pair(request: Request):
+        """Day 25: loopback-only pairing page with the LAN URL + token (404 otherwise)."""
+        server = request.scope.get("server") or (None, None)
+        if not lan or not _loopback_socket(server[0]):
+            raise HTTPException(404)
+        a = lan["addr"]
+        url = f"http://{'[%s]' % a if ':' in a else a}:{lan.get('port', PORT)}/?token={lan['token']}"
+        safe = html.escape(url)
+        body = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                "<title>Pair a phone — Desk Brain</title><body style='font-family:sans-serif;max-width:40em;"
+                "margin:2em auto;padding:0 1em'><h1>Pair a phone</h1><p>On a phone on the same private "
+                "network, open this link once. It sets a cookie and removes the token from the address bar."
+                f"</p><p><code style='word-break:break-all;font-size:1.1em'>{safe}</code></p>"
+                "<p>Anyone with this link can read your desk while LAN mode is on. To revoke it, stop the "
+                "server and delete <code>data/lan-token</code>; a new token is made next start.</p>"
+                "<p>This page is only shown on 127.0.0.1.</p>")
+        return HTMLResponse(body, headers={"cache-control": "no-store", "referrer-policy": "no-referrer",
+                                           "x-frame-options": "DENY"})
+
     @app.get("/")
     def home():
         return FileResponse(STATIC_DIR / "index.html")
@@ -332,6 +352,14 @@ def create_app(root: Path | str | None = None, db_path: Path | str | None = None
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     return app
+
+
+def _loopback_socket(host) -> bool:
+    import ipaddress
+    try:
+        return ipaddress.ip_address(str(host)).is_loopback
+    except ValueError:
+        return False
 
 
 def lan_setup(requested: str) -> dict:
@@ -368,6 +396,8 @@ def main() -> None:
                     help="LAN mode (off by default): private LAN address only, token in data/lan-token")
     args = ap.parse_args()
     lan = lan_setup(args.lan) if args.lan else None
+    if lan:
+        lan["port"] = args.port
     app = create_app(args.desk, args.db, semantic=False if args.no_semantic else None, lan=lan)
     if not lan:
         # Default: loopback only; the desk is not reachable from the network.
@@ -377,7 +407,7 @@ def main() -> None:
     socks = [_bind(HOST, args.port), _bind(lan["addr"], args.port)]
     a = lan["addr"]
     print(f"LAN mode: http://{'[%s]' % a if ':' in a else a}:{args.port}/  (token in data/lan-token; "
-          f"open once with ?token=... on the phone). Loopback: http://{HOST}:{args.port}/", flush=True)
+          f"pairing link on this laptop: /pair). Loopback: http://{HOST}:{args.port}/", flush=True)
     server = uvicorn.Server(uvicorn.Config(app, log_level="info"))
     server.run(sockets=socks)
 
