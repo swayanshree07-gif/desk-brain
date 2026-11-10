@@ -249,7 +249,7 @@ function drawReview() {
     const n = Object.values(s.done).reduce((a, b) => a + b, 0);
     const lapses = (s.done[0] || 0) + (s.done[1] || 0) + (s.done[2] || 0);
     main.innerHTML = head + `<p class="empty">${n ? `Done: ${n} card${n === 1 ? "" : "s"} reviewed` +
-      (lapses ? `, ${lapses} to see again tomorrow` : "") + "." : "Nothing to review today. 🎉"}</p>`;
+      (lapses ? `, ${lapses} to see again tomorrow` : "") + "." : (s.counts.total ? "Nothing to review today. 🎉" : "No flashcards yet. Cards are made from answered doubts (<code>### 🟢 Q:</code>) and findings in your pages; press <b>Re-index</b> after adding some.")}</p>`;
     return;
   }
   const kind = c.review ? `review · every ${c.review.interval} d` : "new";

@@ -263,7 +263,9 @@
     container.querySelector("#g-find").oninput = (e) => { find = e.target.value.trim(); draw(); };
     window.onresize = () => { if (document.body.contains(canvas)) draw(); };
     if (!nodes.length) {
-      container.querySelector(".graph-wrap").innerHTML = `<p class="empty">No pages to show with these filters.</p>`;
+      container.querySelector(".graph-wrap").innerHTML = (g.nodes && g.nodes.length
+        ? `<p class="empty">No pages to show with these filters.</p>`
+        : `<p class="empty">The graph is empty: no pages indexed yet. Press <b>Re-index</b> to scan the desk.</p>`);
       return;
     }
     fit(); draw();
