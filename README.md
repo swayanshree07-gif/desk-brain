@@ -112,6 +112,7 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 
 ## Checks
 ```bash
+scripts/demo.py [--real]                 # final demo: every feature via the API, summary table
 scripts/check.sh                         # everything below in one go on the fixture desk (~30 s); --real for ~/Personal-Desk
 .venv/bin/pytest -q                      # all tests (embedding tests skip until the model is downloaded)
 scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls endpoints, stops it
@@ -140,14 +141,17 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 - `tests/` — pytest suite and the fixture desk; `scripts/` — scripted checks
 
 ## Status
-Day 29 of 30 — feature-complete. The original plan was finished early, so Days 15–27 were
+Day 30 of 30 — complete. The original plan was finished early, so Days 15–27 were
 re-planned (see `PLAN.md`) around a phone view, related notes, cited "Ask the desk" answers and the
 optional LAN mode; Days 26–28 hardened and polished it (security headers, rate limits, keyboard
-shortcuts `/ ? h a g d r w`, empty states, dark-safe styling). 415 tests pass; `scripts/check.sh`
+shortcuts `/ ? h a g d r w`, empty states, dark-safe styling). 416 tests pass; `scripts/check.sh`
 runs tests + render check + server and LAN smoke tests; a fresh clone + `./run.sh` was verified on Day 29.
 Real desk (68 pages): full index < 0.1 s, full embed ~11 s, hybrid p95 2 ms, Ask p95 ~200 ms, `data/` ~90 MB.
 
 Known limits: the UI has not been viewed in a real browser in this environment (JS logic is
 Node-tested, CSS checked statically). "Answered this week" and "new page" in the digest need change
 tracking, which starts at the first index build.
-Next: final demo script (Day 30). See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.
+Demo: `.venv/bin/python scripts/demo.py` (fixture desk, scratch data dir) or `--real` starts the
+server under `timeout`, exercises every feature over the API, prints counts/timings only and stops it.
+Possible follow-ups for the owner: view the UI in a real browser/phone, move the stray `Personal/`
+folder out of the repo root. See `PLAN.md` for the roadmap and `PROGRESS.md` for the daily log.
