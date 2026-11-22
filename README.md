@@ -8,6 +8,9 @@ from answered doubts and dated findings with SM-2 spaced repetition, and a weekl
 on a phone screen (375px) and has an optional token-protected LAN mode. One command starts it:
 `./run.sh`, serving on `127.0.0.1:8765` only.
 
+![Tour of Desk Brain: home, search, ask, graph, doubts, review, digest](docs/media/tour.gif)
+*A tour of the real UI running on the made-up fixture desk (`tests/fixtures/desk`). Regenerate with `tools/make_media.sh`.*
+
 ## Install
 Needs Linux/macOS with Python 3.11+ and network access for the first install. Nothing else
 (no PyTorch, no Node; Node is only used by some optional JS tests).
@@ -47,6 +50,42 @@ under ~400 MB (`.venv` + `data/`).
 ```
 Re-indexing is incremental: pages are re-read only when mtime/size change, and sections are
 re-embedded only when their content hash changes.
+
+### Data flow
+```mermaid
+flowchart LR
+  D[("~/Personal-Desk<br/>read-only")] --> S[scanner.py<br/>skip activity/ Personal/ tools/ _templates/]
+  S --> P[parser.py<br/>titles · links · doubts · findings]
+  P --> C[chunker.py<br/>heading sections]
+  C --> DB[("data/index.sqlite")]
+  DB --> B[bm25.py]
+  DB --> E[embed.py<br/>MiniLM ONNX]
+  B --> H[search.py<br/>hybrid RRF]
+  E --> H
+  DB --> G[graph / doubts / digest / related]
+  DB --> K[cards.py] --> R[("review.py<br/>flashcards.sqlite SM-2")]
+  H --> A[ask.py<br/>cited answers]
+  H & G & R & A --> API[app.py FastAPI /api/*]
+  API --> UI[static/ HTML+JS<br/>127.0.0.1:8765]
+```
+
+### Search and Ask pipeline
+```mermaid
+flowchart TD
+  Q[query] --> M{mode}
+  M -->|keyword| KW[BM25 over sections]
+  M -->|meaning| SE[cosine over MiniLM vectors]
+  M -->|hybrid| BOTH[both lists]
+  BOTH --> RRF[reciprocal-rank fusion]
+  KW & SE & RRF --> CUT[gibberish / low-score cut-off]
+  CUT --> RES[ranked sections + highlighted snippets]
+  RES -->|Ask tab| GRP[group by page ≤4 pages, ≤2 sections]
+  GRP --> SENT[score sentences, keep ≤3 verbatim]
+  SENT --> OK{score high enough?}
+  OK -->|yes| ANS["answer with [n] citations"]
+  OK -->|no| DK["I don't know + sources"]
+  ANS -.optional loopback LLM.-> LLM[rephrase; drop sentences without valid n]
+```
 
 ## Run
 ```bash
@@ -102,6 +141,17 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `POST /api/reindex` — incremental re-index
 
 ## UI
+| Search (hybrid) | Ask the desk |
+|---|---|
+| ![Hybrid search results](docs/media/search.png) | ![Ask answer with citations](docs/media/ask.png) |
+| *Keyword + meaning search, fused with RRF.* | *Extractive answer; every sentence cites its note.* |
+| ![Knowledge graph](docs/media/graph.png) | ![Doubts board](docs/media/doubts.png) |
+| *Graph of pages and links (broken links shown).* | *🔴 open and 🟢 answered doubts across pages.* |
+| ![Flashcard review](docs/media/review.png) | ![Weekly digest](docs/media/digest.png) |
+| *Flashcards from answered doubts, SM-2 scheduling.* | *Weekly digest: what changed, what is still open.* |
+
+<img src="docs/media/phone.png" width="240" alt="Phone view at 375px"> *Phone view at 375 px width.*
+
 - `#/` — home: recently changed notes and open doubts; phone-friendly (header wraps, full-width search, ≥ 40px tap targets at 375px)
 - `#/search?q=…` — search results; `#/page/<path>` — page view with backlinks
 - `#/graph` — knowledge graph (canvas): colour = area, size = links, red ring = has bad links, dashed ring = orphan;
@@ -111,6 +161,9 @@ The desk path defaults to `~/Personal-Desk`; override with `DESK_PATH` or `--des
 - `#/review` — flashcard review: front → **Show answer** (space) → grade 0–5 (keys 0–5; 0–2 = forgot, back tomorrow), link to the source section
 
 ## Checks
+![Query latency chart](docs/media/latency.png)
+*Real `scripts/perf.py` run on the fixture desk (CPU only): median and p95 latency per mode.*
+
 ```bash
 scripts/demo.py [--real]                 # final demo: every feature via the API, summary table
 scripts/check.sh                         # everything below in one go on the fixture desk (~30 s); --real for ~/Personal-Desk
@@ -122,6 +175,16 @@ scripts/smoke_server.sh                  # starts ./run.sh under timeout, curls 
 ```
 
 ## Layout
+```mermaid
+flowchart LR
+  R[desk-brain/] --> RUN[run.sh<br/>one-command start]
+  R --> DB[deskbrain/<br/>indexer, search, ask, cards, FastAPI app]
+  DB --> ST[static/<br/>plain HTML/JS/CSS UI]
+  R --> SC[scripts/<br/>check.sh · perf.py · demo.py · smoke tests]
+  R --> T[tests/<br/>pytest + made-up fixtures/desk]
+  R --> DA[data/ git-ignored<br/>index, vectors, flashcards, model]
+  R --> DO[docs/media + tools/<br/>screenshots, charts, generators]
+```
 - `deskbrain/config.py` — paths and exclusion lists
 - `deskbrain/scanner.py` — walks the desk (no symlinks, excluded dirs pruned), guarded `read_page`
 - `deskbrain/parser.py` — title, headings, links, doubts, dated findings; ignores HTML comments and code fences
